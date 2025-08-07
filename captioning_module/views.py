@@ -1,48 +1,74 @@
 # captioning_module/views.py
 
+import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .serializers import ImageSerializer
-from .models import Image
 
-# 이 부분에 BLIP, LLM, NLP 모델 연동 로직이 들어갈 예정입니다.
-def process_image_and_text(image_data, user_voice):
-    # 1. BLIP 모델을 사용하여 image_data에서 캡션 생성
-    #    original_caption = blip_model.generate_caption(image_data)
-    #
-    # 2. original_caption과 user_voice를 바탕으로 LLM에 요청
-    #    refined_caption = llm_model.refine_text(original_caption, user_voice)
+# ML 라이브러리 import
+from transformers import BlipProcessor, BlipForConditionalGeneration
+from PIL import Image as PILImage
+from io import BytesIO
 
-    # 지금은 더미 데이터 반환
-    return "아름다운 풍경 사진입니다.", "사용자 설명입니다."
+# --- 서버 시작 시 모델을 한 번만 로드합니다. ---
+try:
+    # 로컬 서버 테스트를 위해 Hugging Face의 기본 모델을 사용합니다.
+    # 나중에 파인튜닝된 모델 경로로 변경합니다.
+    MODEL_URI = "Salesforce/blip-image-captioning-large"
+    processor = BlipProcessor.from_pretrained(MODEL_URI)
+    model = BlipForConditionalGeneration.from_pretrained(MODEL_URI)
+    print("BLIP model loaded successfully.")
+except Exception as e:
+    print(f"Error loading BLIP model: {e}")
+    model = None
+    processor = None
+
+# --- 이미지 캡셔닝을 담당하는 함수 ---
+def process_image_with_blip(image_data):
+    if not model or not processor:
+        return "Model not loaded."
+    
+    # 1. 이미지 데이터 처리
+    pil_image = PILImage.open(BytesIO(image_data)).convert('RGB')
+    
+    # 2. BLIP 모델로 캡션 생성
+    inputs = processor(pil_image, return_tensors="pt")
+    out = model.generate(**inputs)
+    
+    # 3. 캡션 디코딩
+    original_caption = processor.decode(out[0], skip_special_tokens=True)
+    return original_caption
 
 class ImageCaptioningView(APIView):
     def post(self, request, *args, **kwargs):
-        # 클라이언트로부터 multipart/form-data를 통해 이미지 파일을 받습니다.
         image_file = request.FILES.get('image')
         if not image_file:
             return Response({"error": "No image file provided."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 1. BLIP 모델을 사용하여 이미지에서 원본 캡션 생성
+        try:
+            original_caption = process_image_with_blip(image_file.read())
+            if original_caption == "Model not loaded.":
+                return Response({"error": "Failed to load the BLIP model."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": f"Error processing image: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # 클라이언트로부터 위도/경도 데이터를 받습니다.
-        latitude = request.data.get('latitude')
-        longitude = request.data.get('longitude')
+        # 2. 사용자 음성 입력과 원본 캡션을 바탕으로 LLM 후처리 로직 구현 (추후)
+        # 현재는 원본 캡션을 최종 캡션으로 사용합니다.
+        refined_caption = original_caption
+        # user_voice_text = request.data.get('user_voice', '') 
+        user_voice_text = "이것은 사용자의 음성 입력 더미 데이터입니다."    # 음성 데이터 더미 코드 (추후 삭제)
 
-        # 이미지와 사용자 음성 입력(향후 추가될 기능)을 처리하는 로직
-        # 현재는 더미 데이터로 대체합니다.
-        refined_caption, user_voice_text = process_image_and_text(image_file, request.data.get('user_voice'))
-
-        # 데이터베이스에 저장할 데이터를 준비합니다.
         data_to_save = {
-            'image_path': 'local_device_path_from_client',  # 클라이언트가 보낸 로컬 경로
+            'image_path': 'local_device_path_from_client',
             'refined_caption': refined_caption,
             'user_voice_text': user_voice_text,
-            'latitude': latitude,
-            'longitude': longitude,
-            'location': '장소 정보' # NLP 모델로 추출할 예정
+            'latitude': request.data.get('latitude'),
+            'longitude': request.data.get('longitude'),
+            'location': request.data.get('location')
         }
-
-        # 시리얼라이저를 사용하여 데이터 유효성 검사 및 저장
+        
         serializer = ImageSerializer(data=data_to_save)
         if serializer.is_valid():
             serializer.save()

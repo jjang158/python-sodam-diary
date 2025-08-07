@@ -20,5 +20,7 @@ from django.urls import path, include
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path('api/v1/images/caption/', include('captioning_module.urls')), # <-- 이 부분을 이렇게 변경합니다.
+    # path('api/v1/images/caption/', include('captioning_module.urls')), # <-- 이 부분을 이렇게 변경합니다.
+    path('api/v1/', include('captioning_module.urls')), # <-- 이 부분을 이렇게 수정합니다.
+
 ]
