@@ -13,11 +13,16 @@ import google.generativeai as genai  # <-- Gemini 라이브러리 추가
 
 
 # ML 라이브러리 import
-from transformers import BlipProcessor, BlipForConditionalGeneration
+from transformers import (
+    BlipProcessor,
+    BlipForConditionalGeneration,
+    CLIPProcessor,
+    CLIPModel,
+)
 from PIL import Image as PILImage
 from io import BytesIO
 
-# --- 서버 시작 시 모델을 한 번만 로드합니다. ---
+# --- 서버 시작 시 BLIP 모델을 한 번만 로드합니다. ---
 try:
     # 로컬 서버 테스트를 위해 Hugging Face의 기본 모델을 사용합니다.
     # 나중에 파인튜닝된 모델 경로로 변경합니다.
@@ -29,6 +34,57 @@ except Exception as e:
     print(f"Error loading BLIP model: {e}")
     model = None
     processor = None
+
+# --- 서버 시작 시 CLIP 모델을 한 번만 로드합니다. ---
+try:
+    CLIP_MODEL_URI = "openai/clip-vit-base-patch32"
+    clip_processor = CLIPProcessor.from_pretrained(CLIP_MODEL_URI)
+    clip_model = CLIPModel.from_pretrained(CLIP_MODEL_URI)
+    print("CLIP model loaded successfully.")
+except Exception as e:
+    print(f"Error loading CLIP model: {e}")
+    clip_model = None
+    clip_processor = None
+
+
+def get_clip_caption(image_bytes):
+    if not clip_model or not clip_processor:
+        return "CLIP 모델 로드 실패"
+
+    try:
+        # 사진의 분위기, 맥락, 감정을 묘사하는 후보 캡션을 작성합니다.
+        candidate_captions = [
+            "평화롭고 고요한 사진",
+            "활기차고 행복한 사진",
+            "슬프고 우울한 사진",
+            "따뜻하고 편안한 사진",
+            "위험하거나 긴장되는 상황의 사진",
+            "차분하고 진지한 분위기의 사진",
+            "축제 분위기나 기념일의 사진",
+            "일상적이고 평범한 순간의 사진",
+            "복잡하고 혼란스러운 상황의 사진",
+            "자연 속에서의 활동을 보여주는 사진",
+            "도시의 풍경을 보여주는 사진",
+            "오래된 역사적 장소를 보여주는 사진",
+            "실내에서 촬영된 사진",
+            "야외에서 촬영된 사진",
+        ]
+
+        image = PILImage.open(BytesIO(image_bytes))
+        inputs = clip_processor(
+            text=candidate_captions, images=image, return_tensors="pt", padding=True
+        )
+        outputs = clip_model(**inputs)
+
+        logits_per_image = outputs.logits_per_image
+        probs = logits_per_image.softmax(dim=1)
+        best_match_index = probs.argmax().item()
+
+        return candidate_captions[best_match_index]
+    except Exception as e:
+        print(f"Error getting CLIP caption: {e}")
+        return "CLIP 캡션 생성 실패"
+
 
 # Gemini API 키 설정
 try:
@@ -44,7 +100,7 @@ DAILY_TOKEN_LIMIT = 50000  # <-- 일일 토큰 제한을 50,000으로 설정합�
 
 
 # --- LLM 연동 및 토큰 사용량 체크 함수 ---
-def get_refined_caption_with_gemini(original_caption, user_voice_text):
+def get_refined_caption_with_gemini(original_caption, clip_caption, user_voice_text):
     # 오늘 날짜의 토큰 사용량 객체를 가져오거나 생성합니다.
     today = timezone.localdate()
     usage, _ = DailyTokenUsage.objects.get_or_create(date=today)
@@ -56,9 +112,10 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
     # API 호출 전, 프롬프트의 토큰 양을 미리 계산합니다.
     prompt = (
         f"당신은 시각 장애인인 사용자의 요청에 따라 이미지 캡션을 더 자연스럽고 상세하게 다듬어주는 AI 봇입니다.\n"
-        f"이미지 캡션: '{original_caption}'\n"
+        f"BLIP 캡션: '{original_caption}'\n"
+        f"CLIP 모델 캡션: '{clip_caption}'\n"  # <-- CLIP 캡션 추가
         f"사용자의 추가 설명: '{user_voice_text}'\n"
-        f"두 정보를 조합하여, 감성적이고 다채로운 자연스러운 한글 캡션을 생성해주세요."
+        f"세 정보를 조합하여, 감성적이고 다채로운 자연스러운 한글 캡션을 생성해주세요."
     )
 
     # 지금은 실제 토큰 계산을 생략하고, 추후 구현할 예정입니다.
@@ -127,10 +184,20 @@ class ImageCaptioningView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        # 1. CLIP 캡션 생성
+        clip_caption = get_clip_caption(image_file.read())
+        image_file.seek(0)  # 파일을 다시 처음으로 되돌려 BLIP이 읽을 수 있게 함
+
+        # 2. LLM 후처리 로직에 CLIP 캡션 전달
+        user_voice_text = request.data.get("user_voice", "사용자 음성 없음")
+        refined_caption = get_refined_caption_with_gemini(
+            original_caption, clip_caption, user_voice_text
+        )  # <-- clip_caption 전달
+
         # 2. 사용자 음성 입력과 원본 캡션을 바탕으로 LLM 후처리 로직 구현
         user_voice_text = request.data.get("user_voice", "사용자 음성 없음")
         refined_caption = get_refined_caption_with_gemini(
-            original_caption, user_voice_text
+            original_caption, clip_caption, user_voice_text
         )
 
         data_to_save = {
