@@ -24,5 +24,14 @@ class Image(models.Model):
     # 이미지 촬영 위치의 경도 (선택 사항)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
 
+class DailyTokenUsage(models.Model):
+    """
+    날짜별 Gemini API 토큰 사용량을 기록하는 모델.
+    """
+    date = models.DateField(unique=True)
+    input_tokens = models.IntegerField(default=0)
+    output_tokens = models.IntegerField(default=0)
+    
     def __str__(self):
-        return f"Image by {self.created_at}"
+        return f"{self.date} - Input: {self.input_tokens}, Output: {self.output_tokens}"
+    
