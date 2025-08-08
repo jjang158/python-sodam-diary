@@ -6,29 +6,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .serializers import ImageSerializer
-from .models import Image, DailyTokenUsage  # <-- DailyTokenUsage 모델을 import 합니다.
-from decouple import config  # <-- decouple 라이브러리를 import 합니다.
+from .models import Image, DailyTokenUsage
+from decouple import config
 from django.utils import timezone
-import google.generativeai as genai  # <-- Gemini 라이브러리 추가
-
-
-# ML 라이브러리 import
-from transformers import BlipProcessor, BlipForConditionalGeneration
+import google.generativeai as genai
 from PIL import Image as PILImage
 from io import BytesIO
+from .model import image_captioner  # <-- 새로 추가된 모듈 임포트
 
-# --- 서버 시작 시 모델을 한 번만 로드합니다. ---
-try:
-    # 로컬 서버 테스트를 위해 Hugging Face의 기본 모델을 사용합니다.
-    # 나중에 파인튜닝된 모델 경로로 변경합니다.
-    MODEL_URI = "Salesforce/blip-image-captioning-large"
-    processor = BlipProcessor.from_pretrained(MODEL_URI)
-    model = BlipForConditionalGeneration.from_pretrained(MODEL_URI)
-    print("BLIP model loaded successfully.")
-except Exception as e:
-    print(f"Error loading BLIP model: {e}")
-    model = None
-    processor = None
+# 기존 BLIP 모델 관련 import와 모델 로딩 코드는 삭제합니다.
 
 # Gemini API 키 설정
 try:
@@ -40,8 +26,7 @@ except Exception as e:
     gemini_api_key = None
 
 # --- 일일 토큰 제한 설정 ---
-DAILY_TOKEN_LIMIT = 50000  # <-- 일일 토큰 제한을 50,000으로 설정합니다.
-
+DAILY_TOKEN_LIMIT = 50000
 
 # --- LLM 연동 및 토큰 사용량 체크 함수 ---
 def get_refined_caption_with_gemini(original_caption, user_voice_text):
@@ -49,7 +34,6 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
     today = timezone.localdate()
     usage, _ = DailyTokenUsage.objects.get_or_create(date=today)
 
-    # 현재 사용량이 일일 제한을 초과했는지 확인합니다.
     if usage.input_tokens + usage.output_tokens >= DAILY_TOKEN_LIMIT:
         return "일일 토큰 사용량 제한에 도달했습니다. 내일 다시 시도해주세요."
 
@@ -58,11 +42,9 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
         f"당신은 시각 장애인인 사용자의 요청에 따라 이미지 캡션을 더 자연스럽고 상세하게 다듬어주는 AI 봇입니다.\n"
         f"이미지 캡션: '{original_caption}'\n"
         f"사용자의 추가 설명: '{user_voice_text}'\n"
-        f"두 정보를 조합하여, 감성적이고 다채로운 자연스러운 한글 캡션을 생성해주세요."
+        f"두 정보를 조합하여, 감성적이고 자연스러운 한글 캡션을 생성하되, 적지 않은 단어의 추가는 되도록 지양해."
     )
 
-    # 지금은 실제 토큰 계산을 생략하고, 추후 구현할 예정입니다.
-    # 대략적인 토큰 수를 가정하여 제한에 걸리는지 확인합니다.
     estimated_input_tokens = len(prompt.split()) * 2
     if (
         usage.input_tokens + usage.output_tokens + estimated_input_tokens
@@ -76,8 +58,6 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
 
         refined_caption = response.text
 
-        # API 호출 성공 시 토큰 사용량 업데이트
-        # Gemini API는 토큰 사용량을 직접 반환하지 않으므로, 대략적으로 계산하거나 추후 정교한 로직을 추가합니다.
         usage.input_tokens += estimated_input_tokens
         usage.output_tokens += len(refined_caption.split()) * 2
         usage.save()
@@ -88,21 +68,7 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
         return f"LLM API 호출 실패: {e}"
 
 
-# --- 이미지 캡셔닝을 담당하는 함수 ---
-def process_image_with_blip(image_data):
-    if not model or not processor:
-        return "Model not loaded."
-
-    # 1. 이미지 데이터 처리
-    pil_image = PILImage.open(BytesIO(image_data)).convert("RGB")
-
-    # 2. BLIP 모델로 캡션 생성
-    inputs = processor(pil_image, return_tensors="pt")
-    out = model.generate(**inputs)
-
-    # 3. 캡션 디코딩
-    original_caption = processor.decode(out[0], skip_special_tokens=True)
-    return original_caption
+# 기존 process_image_with_blip 함수는 이제 필요 없으므로 삭제합니다.
 
 
 class ImageCaptioningView(APIView):
@@ -113,29 +79,42 @@ class ImageCaptioningView(APIView):
                 {"error": "No image file provided."}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 1. BLIP 모델을 사용하여 이미지에서 원본 캡션 생성
+        # 1. 새로운 image_captioner 모듈을 사용하여 이미지 분석
         try:
-            original_caption = process_image_with_blip(image_file.read())
-            if original_caption == "Model not loaded.":
-                return Response(
-                    {"error": "Failed to load the BLIP model."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+            # 파일 객체는 여러 번 읽을 수 없으므로, .read()로 한 번 읽어 둡니다.
+            image_data = image_file.read()
+            # analyze_image 함수가 파일 객체를 받는다면 `image_file`을 전달합니다.
+            # 지금은 `image_data`를 전달하는 것으로 가정합니다.
+            analysis_result = image_captioner.analyze_image(image_data, {})
+            
+            blip_text = analysis_result.get("file_description", "캡션 생성 실패")
+            
+            # file_moods 리스트에서 가장 높은 점수의 라벨을 추출합니다.
+            clip_moods = analysis_result.get("file_moods", [])
+            clip_text = clip_moods[0]["label"] if clip_moods else "분위기 분석 실패"
+            
         except Exception as e:
             return Response(
-                {"error": f"Error processing image: {e}"},
+                {"error": f"Error analyzing image with new model: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # 2. 사용자 음성 입력과 원본 캡션을 바탕으로 LLM 후처리 로직 구현
+        # 2. 사용자 음성 입력과 분석 결과를 바탕으로 LLM 후처리 로직 구현
         user_voice_text = request.data.get("user_voice", "사용자 음성 없음")
+
+        # Gemini 프롬프트에 전달할 원본 캡션 조합
+        original_caption_for_gemini = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
+        
         refined_caption = get_refined_caption_with_gemini(
-            original_caption, user_voice_text
+            original_caption_for_gemini, user_voice_text
         )
 
+        # 3. 모든 분석 결과와 최종 캡션을 DB에 저장
         data_to_save = {
-            "image_path": "local_device_path_from_client",
+            "image_path": image_file.name,
             "refined_caption": refined_caption,
+            "blip_text": blip_text,  # 새로운 필드 추가
+            "clip_text": clip_text,  # 새로운 필드 추가
             "user_voice_text": user_voice_text,
             "latitude": request.data.get("latitude"),
             "longitude": request.data.get("longitude"),

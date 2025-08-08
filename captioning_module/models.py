@@ -14,6 +14,10 @@ class Image(models.Model):
 
     # 이미지가 생성된 시각 (자동으로 저장)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # **추가된 부분**
+    blip_text = models.TextField(default='')
+    clip_text = models.TextField(default='')
 
     # 이미지 촬영 장소 (선택 사항)
     location = models.CharField(max_length=100, blank=True, null=True)
