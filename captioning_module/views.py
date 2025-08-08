@@ -1,7 +1,8 @@
 # captioning_module/views.py
 
-from datetime import timezone
 import os
+import openai
+from datetime import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,11 +13,9 @@ from django.utils import timezone
 import google.generativeai as genai
 from PIL import Image as PILImage
 from io import BytesIO
-from .model import image_captioner  # <-- 새로 추가된 모듈 임포트
+from .model import image_captioner
 
-# 기존 BLIP 모델 관련 import와 모델 로딩 코드는 삭제합니다.
-
-# Gemini API 키 설정
+# --- API 키 설정 ---
 try:
     gemini_api_key = config("GEMINI_API_KEY")
     genai.configure(api_key=gemini_api_key)
@@ -25,24 +24,30 @@ except Exception as e:
     print(f"Error configuring Gemini API: {e}")
     gemini_api_key = None
 
+try:
+    openai.api_key = config("CHATGPT_API_KEY")
+    print("ChatGPT API configured successfully.")
+except Exception as e:
+    print(f"Error configuring ChatGPT API: {e}")
+    openai.api_key = None
+
 # --- 일일 토큰 제한 설정 ---
 DAILY_TOKEN_LIMIT = 50000
 
-# --- LLM 연동 및 토큰 사용량 체크 함수 ---
+
+# --- LLM 연동 및 토큰 사용량 체크 함수 (Gemini) ---
 def get_refined_caption_with_gemini(original_caption, user_voice_text):
-    # 오늘 날짜의 토큰 사용량 객체를 가져오거나 생성합니다.
     today = timezone.localdate()
     usage, _ = DailyTokenUsage.objects.get_or_create(date=today)
 
     if usage.input_tokens + usage.output_tokens >= DAILY_TOKEN_LIMIT:
         return "일일 토큰 사용량 제한에 도달했습니다. 내일 다시 시도해주세요."
 
-    # API 호출 전, 프롬프트의 토큰 양을 미리 계산합니다.
     prompt = (
         f"당신은 시각 장애인인 사용자의 요청에 따라 이미지 캡션을 더 자연스럽고 상세하게 다듬어주는 AI 봇입니다.\n"
         f"이미지 캡션: '{original_caption}'\n"
         f"사용자의 추가 설명: '{user_voice_text}'\n"
-        f"두 정보를 조합하여, 감성적이고 자연스러운 한글 캡션을 생성하되, 적지 않은 단어의 추가는 되도록 지양해."
+        f"두 정보를 조합하여, 감성적이고 다채로운 자연스러운 한글 캡션을 생성해주세요."
     )
 
     estimated_input_tokens = len(prompt.split()) * 2
@@ -55,7 +60,6 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
-
         refined_caption = response.text
 
         usage.input_tokens += estimated_input_tokens
@@ -68,7 +72,43 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
         return f"LLM API 호출 실패: {e}"
 
 
-# 기존 process_image_with_blip 함수는 이제 필요 없으므로 삭제합니다.
+# --- LLM 연동 및 토큰 사용량 체크 함수 (ChatGPT) ---
+def get_refined_caption_with_chatgpt(original_caption, user_voice_text):
+    today = timezone.localdate()
+    usage, _ = DailyTokenUsage.objects.get_or_create(date=today)
+
+    # ChatGPT는 토큰 사용량을 좀 더 정확하게 계산할 수 있지만, 여기서는 간략하게 처리합니다.
+    estimated_tokens = 200 # 예시로 고정값 사용
+
+    if usage.input_tokens + usage.output_tokens + estimated_tokens >= DAILY_TOKEN_LIMIT:
+        return "일일 토큰 사용량 제한에 도달했습니다. 내일 다시 시도해주세요."
+
+    prompt = (
+        f"당신은 시각 장애인인 사용자의 요청에 따라 이미지 캡션을 더 자연스럽고 상세하게 다듬어주는 AI 봇입니다.\n"
+        f"이미지 캡션: '{original_caption}'\n"
+        f"사용자의 추가 설명: '{user_voice_text}'\n"
+        f"두 정보를 조합하여, 감성적이고 다채로운 자연스러운 한글 캡션을 생성해주세요."
+    )
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        refined_caption = response.choices[0].message.content
+
+        # 실제 토큰 사용량 업데이트 (API 응답에서 토큰 정보를 가져올 수 있습니다)
+        usage.input_tokens += response.usage.prompt_tokens
+        usage.output_tokens += response.usage.completion_tokens
+        usage.save()
+        
+        return refined_caption
+    except Exception as e:
+        print(f"Error calling ChatGPT API: {e}")
+        return f"ChatGPT API 호출 실패: {e}"
 
 
 class ImageCaptioningView(APIView):
@@ -78,18 +118,15 @@ class ImageCaptioningView(APIView):
             return Response(
                 {"error": "No image file provided."}, status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # --- 사용할 LLM을 선택합니다. ("gemini" 또는 "chatgpt") ---
+        llm_choice = "gemini" 
 
-        # 1. 새로운 image_captioner 모듈을 사용하여 이미지 분석
         try:
-            # 파일 객체는 여러 번 읽을 수 없으므로, .read()로 한 번 읽어 둡니다.
             image_data = image_file.read()
-            # analyze_image 함수가 파일 객체를 받는다면 `image_file`을 전달합니다.
-            # 지금은 `image_data`를 전달하는 것으로 가정합니다.
             analysis_result = image_captioner.analyze_image(image_data, {})
             
             blip_text = analysis_result.get("file_description", "캡션 생성 실패")
-            
-            # file_moods 리스트에서 가장 높은 점수의 라벨을 추출합니다.
             clip_moods = analysis_result.get("file_moods", [])
             clip_text = clip_moods[0]["label"] if clip_moods else "분위기 분석 실패"
             
@@ -99,22 +136,33 @@ class ImageCaptioningView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # 2. 사용자 음성 입력과 분석 결과를 바탕으로 LLM 후처리 로직 구현
         user_voice_text = request.data.get("user_voice", "사용자 음성 없음")
 
-        # Gemini 프롬프트에 전달할 원본 캡션 조합
-        original_caption_for_gemini = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
+        original_caption_for_llm = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
         
-        refined_caption = get_refined_caption_with_gemini(
-            original_caption_for_gemini, user_voice_text
-        )
+        if llm_choice == "gemini":
+            refined_caption = get_refined_caption_with_gemini(
+                original_caption_for_llm, user_voice_text
+            )
+        elif llm_choice == "chatgpt":
+            if not openai.api_key:
+                return Response(
+                    {"error": "ChatGPT API key is not configured."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            refined_caption = get_refined_caption_with_chatgpt(
+                original_caption_for_llm, user_voice_text
+            )
+        else:
+            return Response(
+                {"error": "Invalid LLM choice."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # 3. 모든 분석 결과와 최종 캡션을 DB에 저장
+
         data_to_save = {
             "image_path": image_file.name,
             "refined_caption": refined_caption,
-            "blip_text": blip_text,  # 새로운 필드 추가
-            "clip_text": clip_text,  # 새로운 필드 추가
+            "blip_text": blip_text,
+            "clip_text": clip_text,
             "user_voice_text": user_voice_text,
             "latitude": request.data.get("latitude"),
             "longitude": request.data.get("longitude"),
