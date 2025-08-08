@@ -113,7 +113,9 @@ def get_refined_caption_with_chatgpt(original_caption, user_voice_text):
 
 class ImageCaptioningView(APIView):
     def post(self, request, *args, **kwargs):
-        image_file = request.FILES.get("image")
+        # image_file = request.FILES.get("image")
+    
+        image_file = request.FILES["image"]
         if not image_file:
             return Response(
                 {"error": "No image file provided."}, status=status.HTTP_400_BAD_REQUEST
@@ -123,8 +125,9 @@ class ImageCaptioningView(APIView):
         llm_choice = "gemini" 
 
         try:
-            image_data = image_file.read()
-            analysis_result = image_captioner.analyze_image(image_data, {})
+            # image_data = image_file.read()
+            # analysis_result = image_captioner.analyze_image(image_data)
+            analysis_result = image_captioner.analyze_image(image_file)
             
             blip_text = analysis_result.get("file_description", "캡션 생성 실패")
             clip_moods = analysis_result.get("file_moods", [])
