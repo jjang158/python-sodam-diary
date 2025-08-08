@@ -1,5 +1,6 @@
-from model_loader import ModelLoader
-from PIL import Image
+from concurrent.futures import ThreadPoolExecutor
+from model_loader import ModelLoader, ModelLoader_mac
+from PIL import Image, UnidentifiedImageError
 import torch
 import logging
 
@@ -12,18 +13,31 @@ MOODS = [
 ]
 
 def analyze_image(file) :
-    result = {
-        "file_description": get_blip_analyze(file),
-        "file_moods": get_clip_analyze(file)
+    # 동기방식
+    # result = {
+    #     "file_description": get_blip_analyze(file),
+    #     "file_moods": get_clip_analyze(file)
+    # }
+    # return result
+    
+    # 비동기방식
+    with ThreadPoolExecutor() as executor:
+        future_blip = executor.submit(get_blip_analyze, file)
+        future_clip = executor.submit(get_clip_analyze, file)
+
+        caption = future_blip.result()
+        moods = future_clip.result()
+    return {
+        "file_description": caption,
+        "file_moods": moods
     }
-    return result
 
 
 # BLIP 모델을 통한 사진 분석(사진묘사)
 def get_blip_analyze(file):
     try:
         # 1. 모델 로드 (메모리에서 가져옴)
-        blip_model, blip_processor = ModelLoader.get_blip()
+        blip_model, blip_processor = ModelLoader_mac.get_blip()
         
         # 2. 이미지 및 텍스트 준비
         image = Image.open(file).convert("RGB")
@@ -50,7 +64,7 @@ def get_clip_analyze(file):
     result = []
     try:
         # 1. 모델 로드 (메모리에서 가져옴)
-        clip_model, clip_processor = ModelLoader.get_clip()
+        clip_model, clip_processor = ModelLoader_mac.get_clip()
         
         # 2. 이미지 및 텍스트 준비
         image = Image.open(file).convert("RGB")
