@@ -13,6 +13,8 @@ class ModelLoader:
     BLIP_MODEL_ID = "Salesforce/blip-image-captioning-base"
     CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
     
+    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
     QUANT_CONFIG = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
@@ -38,7 +40,7 @@ class ModelLoader:
                 cls.CLIP_MODEL_ID,
                 quantization_config=cls.QUANT_CONFIG,
                 device_map="auto"
-            )
+            ).to(cls.DEVICE)
             cls._clip_processor = CLIPProcessor.from_pretrained(cls.CLIP_MODEL_ID)
 
         return cls._clip_model, cls._clip_processor
