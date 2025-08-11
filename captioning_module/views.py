@@ -1,5 +1,3 @@
-# captioning_module/views.py
-
 import os
 import openai
 from datetime import timezone
@@ -36,7 +34,7 @@ DAILY_TOKEN_LIMIT = 50000
 
 
 # --- LLM 연동 및 토큰 사용량 체크 함수 (Gemini) ---
-def get_refined_caption_with_gemini(original_caption, user_voice_text):
+def get_refined_caption_with_gemini(original_caption, file_info):
     today = timezone.localdate()
     usage, _ = DailyTokenUsage.objects.get_or_create(date=today)
 
@@ -46,7 +44,7 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
     prompt = (
         f"당신은 시각 장애인인 사용자의 요청에 따라 이미지 캡션을 더 자연스럽고 상세하게 다듬어주는 AI 봇입니다.\n"
         f"이미지 캡션: '{original_caption}'\n"
-        f"사용자의 추가 설명: '{user_voice_text}'\n"
+        f"사용자의 추가 설명: '{file_info}'\n"
         f"두 정보를 조합하여, 감성적이고 다채로운 자연스러운 한글 캡션을 생성해주세요."
     )
 
@@ -73,7 +71,7 @@ def get_refined_caption_with_gemini(original_caption, user_voice_text):
 
 
 # --- LLM 연동 및 토큰 사용량 체크 함수 (ChatGPT) ---
-def get_refined_caption_with_chatgpt(original_caption, user_voice_text):
+def get_refined_caption_with_chatgpt(original_caption, file_info):
     today = timezone.localdate()
     usage, _ = DailyTokenUsage.objects.get_or_create(date=today)
 
@@ -86,7 +84,7 @@ def get_refined_caption_with_chatgpt(original_caption, user_voice_text):
     prompt = (
         f"당신은 시각 장애인인 사용자의 요청에 따라 이미지 캡션을 더 자연스럽고 상세하게 다듬어주는 AI 봇입니다.\n"
         f"이미지 캡션: '{original_caption}'\n"
-        f"사용자의 추가 설명: '{user_voice_text}'\n"
+        f"사용자의 추가 설명: '{file_info}'\n"
         f"두 정보를 조합하여, 감성적이고 다채로운 자연스러운 한글 캡션을 생성해주세요."
     )
 
@@ -113,21 +111,27 @@ def get_refined_caption_with_chatgpt(original_caption, user_voice_text):
 
 class ImageCaptioningView(APIView):
     def post(self, request, *args, **kwargs):
-        # image_file = request.FILES.get("image")
-    
-        image_file = request.FILES["image"]
-        if not image_file:
+        # file = request.FILES.get("file")
+        # file = request.FILES["file"]
+        file = request.FILES.get("file")
+
+        if not file:
             return Response(
-                {"error": "No image file provided."}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "File or file information is missing",
+                    "data": {}
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # --- 사용할 LLM을 선택합니다. ("gemini" 또는 "chatgpt") ---
         llm_choice = "gemini" 
 
         try:
-            # image_data = image_file.read()
+            # image_data = file.read()
             # analysis_result = image_captioner.analyze_image(image_data)
-            analysis_result = image_captioner.analyze_image(image_file)
+            analysis_result = image_captioner.analyze_image(file)
             
             blip_text = analysis_result.get("file_description", "캡션 생성 실패")
             clip_moods = analysis_result.get("file_moods", [])
@@ -135,38 +139,52 @@ class ImageCaptioningView(APIView):
             
         except Exception as e:
             return Response(
-                {"error": f"Error analyzing image with new model: {e}"},
+                {
+                    "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "message": f"Error analyzing file with new model: {e}",
+                    "data": {}
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        user_voice_text = request.data.get("user_voice", "사용자 음성 없음")
+        file_info = request.data.get("file_info", "사용자 음성 없음")
 
         original_caption_for_llm = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
         
         if llm_choice == "gemini":
             refined_caption = get_refined_caption_with_gemini(
-                original_caption_for_llm, user_voice_text
+                original_caption_for_llm, file_info
             )
         elif llm_choice == "chatgpt":
             if not openai.api_key:
                 return Response(
-                    {"error": "ChatGPT API key is not configured."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    {
+                        "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        "message": "ChatGPT API key is not configured.",
+                        "data": {}
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             refined_caption = get_refined_caption_with_chatgpt(
-                original_caption_for_llm, user_voice_text
+                original_caption_for_llm, file_info
             )
         else:
             return Response(
-                {"error": "Invalid LLM choice."}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "Invalid LLM choice.",
+                    "data": {}
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
 
 
         data_to_save = {
-            "image_path": image_file.name,
+            "file": file.name,
             "refined_caption": refined_caption,
             "blip_text": blip_text,
             "clip_text": clip_text,
-            "user_voice_text": user_voice_text,
+            "file_info": file_info,
             "latitude": request.data.get("latitude"),
             "longitude": request.data.get("longitude"),
             "location": request.data.get("location"),
@@ -175,6 +193,20 @@ class ImageCaptioningView(APIView):
         serializer = ImageSerializer(data=data_to_save)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    "status": status.HTTP_201_CREATED,
+                    "message": "Captioning successful",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "Invalid data",
+                    "data": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
