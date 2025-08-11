@@ -3,9 +3,9 @@ from .model_loader import ModelLoader, ModelLoader_mac
 from PIL import Image, UnidentifiedImageError
 import torch
 import logging
+from io import BytesIO  # BytesIO 모듈을 가져옵니다.
 
 logger = logging.getLogger(__name__)
-# DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # macOS 환경에서는 'mps'를 사용하거나 'cpu'를 사용합니다.
 DEVICE = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
 
@@ -15,21 +15,20 @@ MOODS = [
     "희망", "후련함", "흥분", "피곤함", "잔잔함", "신비로움", "몽환적", "우울함", "즐거움", "편안함", "진중함"
 ]
 
-def analyze_image(file) :
-    # 동기방식
-    # result = {
-    #     "file_description": get_blip_analyze(file),
-    #     "file_moods": get_clip_analyze(file)
-    # }
-    # return result
-    
+def analyze_image(image_data):
+    """
+    바이트 형태의 이미지 데이터를 받아 비동기적으로 BLIP과 CLIP 분석을 수행합니다.
+    """
     # 비동기방식
     with ThreadPoolExecutor() as executor:
-        future_blip = executor.submit(get_blip_analyze, file)
-        future_clip = executor.submit(get_clip_analyze, file)
+        # BytesIO를 사용하여 메모리 내에서 파일처럼 읽을 수 있는 객체를 생성합니다.
+        # 이렇게 하면 각 분석 함수가 파일을 다시 읽을 필요 없이 동일한 메모리 데이터를 사용합니다.
+        future_blip = executor.submit(get_blip_analyze, image_data)
+        future_clip = executor.submit(get_clip_analyze, image_data)
 
         caption = future_blip.result()
         moods = future_clip.result()
+    
     return {
         "file_description": caption,
         "file_moods": moods
@@ -37,16 +36,22 @@ def analyze_image(file) :
 
 
 # BLIP 모델을 통한 사진 분석(사진묘사)
-def get_blip_analyze(file):
+def get_blip_analyze(image_data):
+    """
+    바이트 형태의 이미지 데이터를 BLIP 모델로 분석하여 캡션을 생성합니다.
+    """
     try:
         # 1. 모델 로드 (메모리에서 가져옴)
         blip_model, blip_processor = ModelLoader_mac.get_blip()
+        print("blip model loaded")
         
-        # 2. 이미지 및 텍스트 준비
-        image = Image.open(file).convert("RGB")
+        # 2. 이미지 데이터 준비
+        # BytesIO를 사용하여 바이트 데이터를 PIL Image로 엽니다.
+        image = Image.open(BytesIO(image_data)).convert("RGB")
+        print("image loaded.")
         
-        # inputs = blip_processor(images=image, return_tensors="pt").to(DEVICE)
         inputs = blip_processor(images=image, return_tensors="pt")
+        print("inputs loaded.")
 
         # 모든 입력 텐서를 명시적으로 DEVICE로 이동시킵니다.
         for k, v in inputs.items():
@@ -68,17 +73,20 @@ def get_blip_analyze(file):
 
 
 # CLIP 모델을 통한 사진 분석(분위기)
-def get_clip_analyze(file):
+def get_clip_analyze(image_data):
+    """
+    바이트 형태의 이미지 데이터를 CLIP 모델로 분석하여 분위기를 추출합니다.
+    """
     result = []
     try:
         # 1. 모델 로드 (메모리에서 가져옴)
         clip_model, clip_processor = ModelLoader_mac.get_clip()
         
-        # 2. 이미지 및 텍스트 준비
-        image = Image.open(file).convert("RGB")
+        # 2. 이미지 데이터 준비
+        # BytesIO를 사용하여 바이트 데이터를 PIL Image로 엽니다.
+        image = Image.open(BytesIO(image_data)).convert("RGB")
         
         inputs = clip_processor(text=MOODS, images=image, return_tensors="pt", padding=True)
-        # inputs = {k: v.to(clip_model.device) for k, v in inputs.items()}
         # 모든 입력 텐서를 명시적으로 DEVICE로 이동시킵니다.
         for k, v in inputs.items():
             inputs[k] = v.to(DEVICE)
