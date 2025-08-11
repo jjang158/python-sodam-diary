@@ -111,18 +111,26 @@ def get_refined_caption_with_chatgpt(original_caption, file_info):
 
 class ImageCaptioningView(APIView):
     def post(self, request, *args, **kwargs):
-        # Postman의 'file' 키와 일치시킵니다.
+        # file = request.FILES.get("file")
+        # file = request.FILES["file"]
         file = request.FILES.get("file")
-    
+
         if not file:
             return Response(
-                {"error": "No file file provided."}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "File or file information is missing",
+                    "data": {}
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         # --- 사용할 LLM을 선택합니다. ("gemini" 또는 "chatgpt") ---
         llm_choice = "gemini" 
 
         try:
+            # image_data = file.read()
+            # analysis_result = image_captioner.analyze_image(image_data)
             analysis_result = image_captioner.analyze_image(file)
             
             blip_text = analysis_result.get("file_description", "캡션 생성 실패")
@@ -131,11 +139,14 @@ class ImageCaptioningView(APIView):
             
         except Exception as e:
             return Response(
-                {"error": f"Error analyzing file with new model: {e}"},
+                {
+                    "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "message": f"Error analyzing file with new model: {e}",
+                    "data": {}
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # Postman의 form-data 키와 일치시킵니다.
         file_info = request.data.get("file_info", "사용자 음성 없음")
 
         original_caption_for_llm = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
@@ -147,19 +158,28 @@ class ImageCaptioningView(APIView):
         elif llm_choice == "chatgpt":
             if not openai.api_key:
                 return Response(
-                    {"error": "ChatGPT API key is not configured."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    {
+                        "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        "message": "ChatGPT API key is not configured.",
+                        "data": {}
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
             refined_caption = get_refined_caption_with_chatgpt(
                 original_caption_for_llm, file_info
             )
         else:
             return Response(
-                {"error": "Invalid LLM choice."}, status=status.HTTP_400_BAD_REQUEST
+                {
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "Invalid LLM choice.",
+                    "data": {}
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
 
 
         data_to_save = {
-            # models.py에 정의된 필드 이름 'file'과 일치시킵니다.
             "file": file.name,
             "refined_caption": refined_caption,
             "blip_text": blip_text,
@@ -173,6 +193,20 @@ class ImageCaptioningView(APIView):
         serializer = ImageSerializer(data=data_to_save)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    "status": status.HTTP_201_CREATED,
+                    "message": "Captioning successful",
+                    "data": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "Invalid data",
+                    "data": serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
