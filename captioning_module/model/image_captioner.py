@@ -1,11 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor
-from model_loader import ModelLoader, ModelLoader_mac
+from .model_loader import ModelLoader, ModelLoader_mac
 from PIL import Image, UnidentifiedImageError
 import torch
 import logging
 
 logger = logging.getLogger(__name__)
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# macOS 환경에서는 'mps'를 사용하거나 'cpu'를 사용합니다.
+DEVICE = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+
 MOODS = [
     "평화로움", "따뜻함", "쓸쓸함", "기쁨", "설렘", "슬픔", "여유로움", "고독함", "아픔", "행복",
     "차분함", "긴장감", "만족감", "행복감", "분노", "불안", "낭만", "공허함", "기대", "밝음",
@@ -42,7 +45,12 @@ def get_blip_analyze(file):
         # 2. 이미지 및 텍스트 준비
         image = Image.open(file).convert("RGB")
         
-        inputs = blip_processor(images=image, return_tensors="pt").to(DEVICE)
+        # inputs = blip_processor(images=image, return_tensors="pt").to(DEVICE)
+        inputs = blip_processor(images=image, return_tensors="pt")
+
+        # 모든 입력 텐서를 명시적으로 DEVICE로 이동시킵니다.
+        for k, v in inputs.items():
+            inputs[k] = v.to(DEVICE)
 
         out = blip_model.generate(**inputs,
             max_new_tokens=50,
@@ -70,7 +78,11 @@ def get_clip_analyze(file):
         image = Image.open(file).convert("RGB")
         
         inputs = clip_processor(text=MOODS, images=image, return_tensors="pt", padding=True)
-        inputs = {k: v.to(clip_model.device) for k, v in inputs.items()}
+        # inputs = {k: v.to(clip_model.device) for k, v in inputs.items()}
+        # 모든 입력 텐서를 명시적으로 DEVICE로 이동시킵니다.
+        for k, v in inputs.items():
+            inputs[k] = v.to(DEVICE)
+
         
         # CLIP 추론
         with torch.no_grad():
