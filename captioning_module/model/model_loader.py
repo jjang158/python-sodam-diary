@@ -10,7 +10,7 @@ class ModelLoader:
     _blip_model = None
     _blip_processor = None
     
-    BLIP_MODEL_ID = "Salesforce/blip-image-captioning-base"
+    BLIP_MODEL_ID = "Salesforce/blip-image-captioning-large"
     CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
     
     QUANT_CONFIG = BitsAndBytesConfig(
@@ -50,7 +50,7 @@ class ModelLoader_mac:
     _blip_model = None
     _blip_processor = None
 
-    BLIP_MODEL_ID = "Salesforce/blip-image-captioning-base"
+    BLIP_MODEL_ID = "Salesforce/blip-image-captioning-large"
     CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
 
     DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
