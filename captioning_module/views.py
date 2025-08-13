@@ -61,9 +61,10 @@ def set_test_prompt(original_caption, file_info):
     """
     blip_text = original_caption.get("file_description", "캡션 생성 실패")
     clip_moods = original_caption.get("file_moods", [])
-    return f"""사진 설명 : {blip_text},
-            예측된 분위기 (label: 감정, score: 점수): {clip_moods},
-            사용자 입력 사진 정보 (선택적): {file_info}"""
+
+    return (f"""Photo description: {blip_text},
+            Predicted mood: {clip_moods},
+            Additional info: {file_info}""")
 
 
 # --- LLM 연동 및 토큰 사용량 체크 함수 (Gemini) ---
@@ -120,7 +121,7 @@ def get_refined_caption_with_chatgpt(original_caption, file_info):
         return "일일 토큰 사용량 제한에 도달했습니다. 내일 다시 시도해주세요."
 
     # 프롬프트 생성 함수 호출
-    prompt = set_prompt(original_caption, file_info)
+    prompt = set_test_prompt(original_caption, file_info)
 
     try:
         response = openai.chat.completions.create(
@@ -128,27 +129,23 @@ def get_refined_caption_with_chatgpt(original_caption, file_info):
             messages=[
                 {
                     "role": "system",
-                    "content": """당신은 시각장애인에게 사진의 내용을 따뜻하고 감각적으로 설명하는 안내자입니다.
-                    아래 항목을 참고하여, 생생하고 정서적인 묘사를 포함한 1~3문장의 설명을 만들어주세요.
-                    설명에는 시각적 배경을 기반으로 하여 인물/동물의 행동, 주변 분위기, 감정 등을 포함해,
-                    시각장애인이 장면을 머릿속에 떠올릴 수 있게 구성합니다.
+                    "content": """
+                    You are a guide who warmly and vividly describes photos for visually impaired people.
+                    Using the information below, write 1–3 sentences that, based on the visual background, include vivid details of people/animals’ actions, atmosphere, and emotions.
+                    Save as Korean.
 
-                    사진 설명:
-                    {사진에 대한 기본 설명 텍스트}
+                    Photo description:
+                    {Basic photo description}
 
-                    예측된 분위기 (label: 감정, score: 점수):
-                    {예: [{'label': '평화로움', 'score': 7.75}, {'label': '설렘', 'score': 6.52}, {'label': '고통', 'score': 4.48}]}
+                    Predicted mood:
+                    {e.g., [{'label': 'Peacefulness', 'score': 7.75}, {'label': 'Excitement', 'score': 6.52}]}
 
-                    사용자 입력 사진 정보 (선택적):
-                    {사용자가 추가로 설명한 정보, 예: "이 사진은 가족 여행 중 찍은 사진이에요."}
+                    Additional info (optional):
+                    {Extra details from the user}
 
-                    출력 형식 예시:
-                    “{감정과 분위기 중심으로 부드럽게 시작} {사진에 등장하는 인물과 행동 묘사}, {자연 환경이나 배경 묘사}. {사진을 보는 사람에게 감정적 여운을 주는 마무리 문장}”
-
-                    예시 출력:
-                    “노을이 지는 해변에서 평화로움이 감도는 순간이에요.
-                    한 여성이 기린과 나란히 앉아 강아지를 쓰다듬으며, 손에 든 휴대전화를 바라보고 있어요.
-                    잔잔한 파도와 따뜻한 햇살 속에서, 설렘과 고요함이 함께 머무는 풍경입니다.""",
+                    Output example:
+                    “{Start with mood/atmosphere} {Describe people and actions}, {Describe background}. {End with an emotional touch}”
+                    """,
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -233,7 +230,7 @@ class ImageCaptioningView(APIView):
         file_info = request.data.get("file_info", "사용자 음성 없음")
 
         # LLM 프롬프트에 모든 분위기 정보를 포함하도록 수정
-        original_caption_for_llm = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
+        # original_caption_for_llm = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
 
         if llm_choice == "gemini":
             refined_caption = get_refined_caption_with_gemini(
@@ -252,7 +249,7 @@ class ImageCaptioningView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
             refined_caption = get_refined_caption_with_chatgpt(
-                original_caption_for_llm, file_info
+                analysis_result, file_info
             )
         else:
             return Response(
