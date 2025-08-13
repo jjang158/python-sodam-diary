@@ -130,7 +130,7 @@ def get_refined_caption_with_chatgpt(original_caption, file_info):
                     "role": "system",
                     "content": """당신은 시각장애인에게 사진의 내용을 따뜻하고 감각적으로 설명하는 안내자입니다.
                     아래 항목을 참고하여, 생생하고 정서적인 묘사를 포함한 1~3문장의 설명을 만들어주세요.
-                    설명에는 시각적 배경, 인물/동물의 행동, 주변 분위기, 감정 등을 포함해,
+                    설명에는 시각적 배경을 기반으로 하여 인물/동물의 행동, 주변 분위기, 감정 등을 포함해,
                     시각장애인이 장면을 머릿속에 떠올릴 수 있게 구성합니다.
 
                     사진 설명:
@@ -152,6 +152,7 @@ def get_refined_caption_with_chatgpt(original_caption, file_info):
                 },
                 {"role": "user", "content": prompt},
             ],
+            temperature=0.2,  # 낮은 온도로 일관성 있는 답변 유도
         )
         refined_caption = response.choices[0].message.content
 
