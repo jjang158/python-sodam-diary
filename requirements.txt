@@ -62,3 +62,10 @@ typing-inspection==0.4.1
 typing_extensions==4.14.1
 uritemplate==4.2.0
 urllib3==2.5.0
+fastapi
+uvicorn[standard]
+pydantic
+sqlalchemy  # 비동기 ORM을 위한 기반
+decouple    # 기존 .env 파일 읽기 재사용
+google-genai # Gemini API 재사용
+openai # ChatGPT API 재사용
