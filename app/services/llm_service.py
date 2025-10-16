@@ -4,6 +4,13 @@ from typing import Dict, Any
 from app.core.config import settings
 from captioning_module.model import image_captioner  # 모델 로직 재사용
 import time  # 토큰 사용량 계산 및 출력을 위해 사용
+from openai import OpenAI, AsyncOpenAI # AsyncOpenAI를 임포트합니다.
+import json  # JSON 응답 파싱을 위해 사용
+
+if settings.CHATGPT_API_KEY:
+    async_openai_client = AsyncOpenAI(api_key=settings.CHATGPT_API_KEY)
+else:
+    async_openai_client = None
 
 
 # --- 프롬프트 생성 함수 (기존 로직 유지) ---
@@ -69,47 +76,47 @@ async def get_refined_caption_with_gemini_async(original_caption: str, file_info
         return f"LLM API 호출 실패: {e}"
 
 
-# --- LLM 연동 및 캡션 생성 함수 (ChatGPT) ---
-async def get_refined_caption_with_chatgpt_async(original_caption: str, file_info: str):
-    if not settings.CHATGPT_API_KEY:
-        return "LLM API 호출 실패: ChatGPT API key is not configured."
+async def get_refined_caption_with_chatgpt_async(
+    original_caption: str, file_info: str
+) -> str:
+    """
+    ChatGPT API를 사용하여 캡션을 개선하고 응답을 파싱합니다.
+    """
+    if not async_openai_client:
+        return "LLM API 호출 실패: ChatGPT API 키가 설정되지 않았습니다."
 
-    # ChatGPT는 시스템 프롬프트를 분리하여 전달
+    # --- 1. JSON 응답을 위한 시스템 프롬프트 정의 ---
     system_prompt = (
-        "You are a guide who warmly and vividly describes photos for visually impaired people. "
-        "Using the information below, write 1–3 sentences that, based on the visual background, "
-        "include vivid details of people/animals’ actions, atmosphere, and emotions. "
-        "Save as Korean."
+        "You are a helpful assistant that refines an image caption based on provided context. "
+        "Your final response MUST be a single JSON object with the key 'refined_caption'. "
+        "The value of 'refined_caption' should be the final, refined caption in Korean."
     )
-    prompt_user = set_test_prompt(original_caption, file_info)
-
-    # 토큰 사용량 체크 (현재 호출의 예상 비용만 확인)
-    estimated_tokens = get_estimated_tokens(prompt_user) + get_estimated_tokens(
-        system_prompt
-    )
-    if estimated_tokens * 2 >= settings.DAILY_TOKEN_LIMIT:
-        return "일일 토큰 사용량 제한에 도달했습니다. (단일 요청 크기 초과)"
+    
+    # --- 2. 사용자 입력 프롬프트 생성 ---
+    prompt = set_prompt(original_caption, file_info)
+    model_name = "gpt-3.5-turbo" # 사용할 모델
 
     try:
-        # 비동기 API 호출 (openai-python 라이브러리 지원)
-        response = await openai.chat.completions.create(
-            model="gpt-4o",
+        completion = await async_openai_client.chat.completions.create(
+            model=model_name,
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt_user},
+                # 시스템 메시지 추가
+                {"role": "system", "content": system_prompt}, 
+                {"role": "user", "content": prompt}
             ],
-            temperature=0.2,
+            temperature=0.7,
+            response_format={"type": "json_object"}
         )
-        refined_caption = response.choices[0].message.content
 
-        # 실제 토큰 사용량 출력 (Persistence는 없음)
-        input_tokens = response.usage.prompt_tokens
-        output_tokens = response.usage.completion_tokens
-        print(
-            f"[ChatGPT] 실제 토큰 사용량 (입력/출력): {input_tokens}/{output_tokens}. (Limit: {settings.DAILY_TOKEN_LIMIT})"
-        )
+        # 3. 응답에서 텍스트 추출 및 파싱
+        response_text = completion.choices[0].message.content
+        data = json.loads(response_text)
+        refined_caption = data.get("refined_caption", "캡션 생성 결과 없음")
 
         return refined_caption
+
     except Exception as e:
-        print(f"Error calling ChatGPT API: {e}")
-        return f"LLM API 호출 실패: {e}"
+        print(f"Error calling ChatGPT API: {e}") 
+        # 이전 오류 메시지 대신 실제 예외를 출력하도록 변경했습니다.
+        # 기존에는 'object ChatCompletion can't be used in 'await' expression'
+        return "LLM API 호출 실패: ChatGPT API 통신 중 오류 발생"
