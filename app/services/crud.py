@@ -1,3 +1,5 @@
+# app/services/crud.py
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database.models import ImageModel

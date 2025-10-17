@@ -1,3 +1,5 @@
+# app/database/models.py
+
 from sqlalchemy import Column, Integer, String, Text, Date, DateTime, Numeric
 from sqlalchemy.sql import func
 from app.database.database import Base  # database.py에서 정의한 Base 상속
