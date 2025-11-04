@@ -18,21 +18,12 @@ MOODS = [
 
 def analyze_image(image_data):
     """
-    바이트 형태의 이미지 데이터를 받아 비동기적으로 BLIP과 CLIP 분석을 수행합니다.
+    바이트 형태의 이미지 데이터를 받아 비동기적으로 BLIP을 통해 분석을 수행합니다.
     """
-    # 비동기방식
-    with ThreadPoolExecutor() as executor:
-        # BytesIO를 사용하여 메모리 내에서 파일처럼 읽을 수 있는 객체를 생성합니다.
-        # 이렇게 하면 각 분석 함수가 파일을 다시 읽을 필요 없이 동일한 메모리 데이터를 사용합니다.
-        future_blip = executor.submit(get_blip_analyze, image_data)
-        future_clip = executor.submit(get_clip_analyze, image_data)
-
-        caption = future_blip.result()
-        moods = future_clip.result()
-    
+    # 이미지 묘사
+    caption = get_blip_analyze(image_data)
     return {
         "file_description": caption,
-        "file_moods": moods
     }
 
 

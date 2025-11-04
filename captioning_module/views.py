@@ -60,10 +60,8 @@ def set_test_prompt(original_caption, file_info):
     LLM에 전달할 프롬프트 메시지를 생성하여 반환합니다.
     """
     blip_text = original_caption.get("file_description", "캡션 생성 실패")
-    clip_moods = original_caption.get("file_moods", [])
 
     return (f"""Photo description: {blip_text},
-            Predicted mood: {clip_moods},
             Additional info: {file_info}""")
 
 
@@ -195,14 +193,6 @@ class ImageCaptioningView(APIView):
             analysis_result = image_captioner.analyze_image(image_data)
 
             blip_text = analysis_result.get("file_description", "캡션 생성 실패")
-            clip_moods = analysis_result.get("file_moods", [])
-
-            # mood는 3가지 높은 무드가 모두 나올 수 있도록 수정
-            if clip_moods:
-                # 상위 3개 무드의 라벨만 추출하여 문자열로 조합
-                clip_text = ", ".join([mood["label"] for mood in clip_moods])
-            else:
-                clip_text = "분위기 분석 실패"
 
         except OSError as e:
             # OSError: image file is truncated 에러를 명확하게 로깅하고 사용자에게 알립니다.
@@ -230,11 +220,10 @@ class ImageCaptioningView(APIView):
         file_info = request.data.get("file_info", "사용자 음성 없음")
 
         # LLM 프롬프트에 모든 분위기 정보를 포함하도록 수정
-        # original_caption_for_llm = f"이미지 설명: {blip_text}. 분위기: {clip_text}."
+        # original_caption_for_llm = f"이미지 설명: {blip_text}."
 
         if llm_choice == "gemini":
             refined_caption = get_refined_caption_with_gemini(
-                # original_caption_for_llm, file_info
                 analysis_result,
                 file_info,
             )
@@ -265,7 +254,6 @@ class ImageCaptioningView(APIView):
             "file": file.name,  # 파일명(문자열)을 사용하도록 수정
             "refined_caption": refined_caption,
             "blip_text": blip_text,
-            "clip_text": clip_text,  # 수정된 clip_text를 저장
             "file_info": file_info,
             "latitude": request.data.get("latitude"),
             "longitude": request.data.get("longitude"),

@@ -17,7 +17,6 @@ class Image(models.Model):
     
     # **추가된 부분**
     blip_text = models.TextField(default='')
-    clip_text = models.TextField(default='')
 
     # 이미지 촬영 장소 (선택 사항)
     location = models.CharField(max_length=100, blank=True, null=True)
