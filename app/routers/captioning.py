@@ -10,7 +10,7 @@ from captioning_module.model import image_captioner
 # 새로 작성한 로직들 (비즈니스 로직 및 DB)
 from app.services.llm_service import (
     get_refined_caption_with_gemini_async,
-    get_refined_caption_with_chatgpt_async,
+    get_refined_caption_and_keywords_with_chatgpt_async,
 )
 from app.services import crud  # crud.py에서 정의한 DB 상호작용 함수
 from app.schemas.image import ImageCreate, Image  # DB 저장용 스키마, 응답용 스키마
@@ -69,27 +69,37 @@ async def create_caption(
             detail=f"파일 분석 또는 모델 추론 중 오류 발생: {e}",
         )
 
-    # 2단계: LLM을 통한 캡션 개선 (네트워크 I/O 작업)
+# 2단계: LLM을 통한 캡션 개선 (네트워크 I/O 작업)
+    refined_caption = None # 초기화
+    keywords = [] # 키워드 변수 초기화
+
     if llm_choice == "gemini":
+        # Gemini는 기존 로직을 유지 (문자열 반환 가정)
         refined_caption = await get_refined_caption_with_gemini_async(
             f"이미지 설명: {blip_text}. 분위기: {clip_text}.", file_info
         )
     elif llm_choice == "chatgpt":
-        refined_caption = await get_refined_caption_with_chatgpt_async(
+        # ChatGPT 호출 및 딕셔너리 응답 처리
+        llm_result = await get_refined_caption_and_keywords_with_chatgpt_async(
             f"Photo description: {blip_text}, Predicted mood: {clip_text}",
-            file_info,  # services/llm_service.py에 맞게 데이터 전달
+            file_info,
         )
+        
+        # 딕셔너리에서 값 추출 (핵심 수정)
+        refined_caption = llm_result.get("refined_caption", "LLM 결과 추출 오류")
+        keywords = llm_result.get("keywords", []) # 키워드 추출
+        
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid LLM choice."
         )
 
-    # LLM 오류 처리
+    # LLM 오류 처리 (refined_caption이 문자열이라고 가정하고 체크)
     if "LLM API 호출 실패" in refined_caption:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=refined_caption
         )
-
+    
     # 3단계: DB 저장을 위한 Pydantic 데이터 준비
     # DB에 저장할 때 필요한 데이터만 ImageCreate 스키마에 맞춥니다.
     data_to_create = ImageCreate(
@@ -97,6 +107,9 @@ async def create_caption(
         refined_caption=refined_caption,
         blip_text=blip_text,
         clip_text=clip_text,
+        # **추가된 필드:** DB에 저장할 키워드 리스트를 문자열로 변환 (DB 설계에 따라 다름)
+        # 예: 키워드 리스트를 콤마로 구분된 문자열로 저장한다고 가정
+        keywords=",".join(keywords) if keywords else None,
         file_info=file_info,
         latitude=latitude,
         longitude=longitude,

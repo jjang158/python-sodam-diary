@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  sodam_api:
+    build:
+      context: . # 현재 디렉터리의 Dockerfile을 사용해 이미지를 빌드합니다.
+    container_name: sodam_api
+    # 💡 FastAPI 실행 명령어: 프로젝트의 실제 메인 파일 경로에 맞게 'main.main:app' 부분을 조정하세요.
+    # 예: main 디렉터리 안에 main.py 파일이 있고 앱 객체가 'app'인 경우
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    
+    # 코드를 컨테이너에 마운트하여 로컬에서 코드를 변경하면 컨테이너에 반영됩니다.
+    volumes:
+      - .:/app 
+      
+    # 로컬 포트 8000번을 컨테이너 포트 8000번으로 연결합니다.
+    ports:
+      - "8000:8000"
+      
+    # 환경 변수 파일을 로드합니다. (LLM API 키 등을 위해 필요합니다.)
+    env_file:
+      - .env

@@ -40,6 +40,8 @@ class ImageBase(BaseModel):
     # DecimalField 대신 float 사용 (Python-DB 간 호환성 고려)
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
+    # 🌟 핵심 수정: DB에 저장할 키워드 문자열 필드를 Base에 추가
+    keywords: Optional[str] = None
 
 
 class ImageCreate(ImageBase):
