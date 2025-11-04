@@ -7,7 +7,8 @@ from io import BytesIO  # BytesIO 모듈을 가져옵니다.
 
 logger = logging.getLogger(__name__)
 # macOS 환경에서는 'mps'를 사용하거나 'cpu'를 사용합니다.
-DEVICE = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+# AWS 환경에 맞게 CPU로 설정
+DEVICE = torch.device('cpu')
 
 MOODS = [
     "평화로움", "따뜻함", "쓸쓸함", "기쁨", "설렘", "슬픔", "여유로움", "고독함", "아픔", "행복",
@@ -42,7 +43,8 @@ def get_blip_analyze(image_data):
     """
     try:
         # 1. 모델 로드 (메모리에서 가져옴)
-        blip_model, blip_processor = ModelLoader_mac.get_blip()
+        # AWS 환경에 맞게 ModelLoader 사용
+        blip_model, blip_processor = ModelLoader.get_blip()
         print("blip model loaded")
         
         # 2. 이미지 데이터 준비
@@ -80,7 +82,8 @@ def get_clip_analyze(image_data):
     result = []
     try:
         # 1. 모델 로드 (메모리에서 가져옴)
-        clip_model, clip_processor = ModelLoader_mac.get_clip()
+        # AWS 환경에 맞게 ModelLoader 사용
+        clip_model, clip_processor = ModelLoader.get_clip()
         
         # 2. 이미지 데이터 준비
         # BytesIO를 사용하여 바이트 데이터를 PIL Image로 엽니다.
