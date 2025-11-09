@@ -2,9 +2,10 @@
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.routers import captioning
+# 🌟 변경: 기존 captioning 라우터 대신, 새로운 통합 라우터(api)를 import합니다.
+from app.routers.api import api_router 
 from app.database.database import async_engine, Base
-from app.database.models import *  # 모델을 import해야 Base.metadata가 테이블을 인식
+from app.database.models import * # 모델을 import해야 Base.metadata가 테이블을 인식
 
 
 # --- 1. DB 초기화 컨텍스트 관리자 ---
@@ -14,7 +15,6 @@ async def create_db_tables():
     """
     async with async_engine.begin() as conn:
         # 테이블 존재 여부에 관계없이 Base.metadata에 정의된 모든 테이블을 생성합니다.
-        # (이미 존재하면 건너뜁니다.)
         await conn.run_sync(Base.metadata.create_all)
     print("Database tables initialized successfully.")
 
@@ -34,13 +34,15 @@ async def lifespan(app: FastAPI):
 # --- 2. FastAPI 인스턴스 생성 ---
 app = FastAPI(
     title="Sodam Diary API",
-    description="Visually Impaired Captioning Server with BLIP/CLIP and LLM",
+    description="Visually Impaired Captioning Server with BLIP and LLM",
     version="1.0.0",
     lifespan=lifespan,  # 라이프스팬 매니저 적용
 )
 
 # --- 3. 라우터 등록 ---
-app.include_router(captioning.router, prefix="/api/v1")
+# 🌟 변경: api_router를 "/api" 경로에 등록합니다. 
+# 버전 정보(/v1)는 이미 api_router 내부에 정의되어 있습니다.
+app.include_router(api_router, prefix="/api")
 
 
 @app.get("/")
