@@ -86,20 +86,21 @@ async def generate_llm_result(
     Step 1의 캡션과 사용자의 추가 정보를 받아 LLM을 호출하여 최종 일기 해설과 단어 태그를 생성하고 DB에 저장합니다.
     """
 
-    # 1. LLM 프롬프트 구성
-    full_prompt = (
-        f"당신은 사용자의 사진과 생각을 바탕으로 일기를 작성해주는 인공지능입니다.\n"
-        f"다음 정보를 바탕으로 일기 해설('diary')과 핵심 단어 태그('tags')를 JSON 형식으로 생성하세요:\n"
-        f"사용자 입력 정보: {request.user_input}\n"
-        f"사진으로부터 추출된 설명: {request.blip_caption}"
-    )
+    # # 1. LLM 프롬프트 구성
+    # full_prompt = (
+    #     f"당신은 사용자의 사진과 생각을 바탕으로 일기를 작성해주는 인공지능입니다.\n"
+    #     f"다음 정보를 바탕으로 일기 해설('diary')과 핵심 단어 태그('tags')를 JSON 형식으로 생성하세요:\n"
+    #     f"사용자 입력 정보: {request.user_input}\n"
+    #     f"사진으로부터 추출된 설명: {request.blip_caption}"
+    # )
 
     # 2. LLM 서비스 호출
     try:
+        # 🌟 수정: BLIP 캡션(request.blip_caption)과 사용자 입력(request.user_input)만 전달
         llm_result = await get_refined_caption_and_keywords_with_chatgpt_async(
-            full_prompt, request.user_input
+            request.blip_caption,
+            request.user_input
         )
-
         refined_caption = llm_result.get("refined_caption", "LLM 결과 추출 오류")
         keywords = llm_result.get("keywords", [])
 
