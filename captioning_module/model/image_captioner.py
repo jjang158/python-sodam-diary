@@ -1,3 +1,5 @@
+# captioning_module/model/image_captioner.py
+
 from concurrent.futures import ThreadPoolExecutor
 from .model_loader import ModelLoader, ModelLoader_mac
 from PIL import Image, UnidentifiedImageError

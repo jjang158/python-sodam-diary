@@ -1,3 +1,5 @@
+# captioning_module/model/model_loader.py
+
 from transformers import BlipProcessor, BlipForConditionalGeneration
 from transformers import BitsAndBytesConfig
 from PIL import Image
