@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, status, De
 
 # **필수 Import 추가:** CPU 바운드 작업을 위해 run_in_threadpool
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy.ext.asyncio import AsyncSession
+# from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, Any, List  # List 추가
 
 # 기존 BLIP 모델 로직 (CLIP 관련 로직은 이미 삭제되었다고 가정)
@@ -19,7 +19,7 @@ from app.schemas.image import (
     LlmResult,
     ImageCreate,
 )  # 🌟 새로운 스키마 import
-from app.database.database import get_db_session
+# from app.database.database import get_db_session
 
 from app.services.llm_service import translate_to_korean_async
 
@@ -80,7 +80,7 @@ async def analyze_image_endpoint(image_file: UploadFile = File(...)):
 )
 async def generate_llm_result(
     request: GenerateRequest,
-    db: AsyncSession = Depends(get_db_session),
+    # db: AsyncSession = Depends(get_db_session),
 ):
     """
     Step 1의 캡션과 사용자의 추가 정보를 받아 LLM을 호출하여 최종 일기 해설과 단어 태그를 생성하고 DB에 저장합니다.
@@ -108,29 +108,31 @@ async def generate_llm_result(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"LLM generation failed: {e}",
         )
+    
+    return LlmResult(diary=refined_caption, tags=keywords)
 
-    # 3. DB 저장을 위한 Pydantic 데이터 준비
-    data_to_create = ImageCreate(
-        file="BLIP_LLM_Processed",  # 임시 파일명
-        refined_caption=refined_caption,
-        blip_text=request.blip_caption,
-        keywords=",".join(keywords) if keywords else None,
-        file_info=request.user_input,
-        latitude=request.latitude,
-        longitude=request.longitude,
-        location=request.location,
-    )
+    # # 3. DB 저장을 위한 Pydantic 데이터 준비
+    # data_to_create = ImageCreate(
+    #     file="BLIP_LLM_Processed",  # 임시 파일명
+    #     refined_caption=refined_caption,
+    #     blip_text=request.blip_caption,
+    #     keywords=",".join(keywords) if keywords else None,
+    #     file_info=request.user_input,
+    #     latitude=request.latitude,
+    #     longitude=request.longitude,
+    #     location=request.location,
+    # )
 
-    # 4. DB 저장 및 응답 반환
-    try:
-        saved_image = await crud.create_image_data(db, data_to_create)
+    # # 4. DB 저장 및 응답 반환
+    # try:
+    #     saved_image = await crud.create_image_data(db, data_to_create)
 
-        # LlmResult 스키마에 맞춰 최종 응답 반환
-        return LlmResult(diary=saved_image.refined_caption, tags=keywords)
+    #     # LlmResult 스키마에 맞춰 최종 응답 반환
+    #     return LlmResult(diary=saved_image.refined_caption, tags=keywords)
 
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"데이터베이스 저장 중 오류 발생: {e}",
-        )
+    # except Exception as e:
+    #     # await db.rollback()
+    #     raise HTTPException(
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #         detail=f"데이터베이스 저장 중 오류 발생: {e}",
+    #     )

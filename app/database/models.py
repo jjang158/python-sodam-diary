@@ -19,7 +19,7 @@ class ImageModel(Base):
     file = Column(String(255), nullable=False)
     refined_caption = Column(Text, nullable=False)
     blip_text = Column(Text, nullable=True, default="")
-    clip_text = Column(Text, nullable=True, default="")
+    # clip_text = Column(Text, nullable=True, default="")
     file_info = Column(Text, nullable=True)
     location = Column(String(100), nullable=True)
 
