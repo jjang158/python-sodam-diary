@@ -19,9 +19,12 @@ class ImageModel(Base):
     file = Column(String(255), nullable=False)
     refined_caption = Column(Text, nullable=False)
     blip_text = Column(Text, nullable=True, default="")
-    clip_text = Column(Text, nullable=True, default="")
+    # clip_text = Column(Text, nullable=True, default="")
     file_info = Column(Text, nullable=True)
     location = Column(String(100), nullable=True)
+
+    # 키워드를 저장할 새 컬럼 추가
+    keywords = Column(String, nullable=True) # 콤마로 구분된 문자열 저장 가정
 
     # 위치 정보 (DecimalField 대체)
     # Django는 DecimalField를 사용했지만, SQLAlchemy는 Numeric 타입을 사용합니다.
