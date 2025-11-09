@@ -40,7 +40,7 @@ def set_prompt_for_keyword(original_caption: str, file_info: str) -> str:
         f"[요청 사항]\n"
         f"1. 해설 생성: 위에 제시된 정보를 바탕으로, 눈으로 보는 것처럼 사진의 상황, 분위기, 감정을 생생하고 직관적인 언어로 전달하는 최종 해설을 작성해주세요.\n"
         f"2. 키워드 추출: 이 사진과 해설을 대표하는 **객체, 장소, 분위기, 감정, 인물의 이름**을 포함하는 **10개의 핵심 키워드**를 추출해주세요. 키워드는 명사 또는 명사구 형태여야 합니다."
-    )a
+    )
 
 async def get_refined_caption_and_keywords_with_chatgpt_async(
     original_caption: str, file_info: str
