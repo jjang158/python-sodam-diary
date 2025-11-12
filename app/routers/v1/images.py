@@ -58,17 +58,18 @@ async def analyze_image_endpoint(image_file: UploadFile = File(...)):
             status_code=status.HTTP_400_BAD_REQUEST, detail="Caption generation failed."
         )
 
-    # BLIP 결과(영어)를 LLM을 사용하여 한국어로 번역 (LLM 호출)
-    try:
-        korean_caption = await translate_to_korean_async(caption)
-    except Exception as e:
-        # 번역 오류가 나더라도, 최소한 영어 캡션을 반환하여 Step 2를 진행 가능하게 함
-        print(f"Translation LLM call failed, returning English caption: {e}")
-        korean_caption = caption
+    # # BLIP 결과(영어)를 LLM을 사용하여 한국어로 번역 (LLM 호출)
+    # try:
+    #     korean_caption = await translate_to_korean_async(caption)
+    # except Exception as e:
+    #     # 번역 오류가 나더라도, 최소한 영어 캡션을 반환하여 Step 2를 진행 가능하게 함
+    #     print(f"Translation LLM call failed, returning English caption: {e}")
+    #     korean_caption = caption
 
-    # 최종 한국어 캡션을 반환
-    return BlipResult(caption=korean_caption)
+    # # 최종 한국어 캡션을 반환
+    # return BlipResult(caption=korean_caption)
 
+    return BlipResult(caption=caption)
 
 # ----------------------------------------------------
 # B. Step 2: LLM 해설 및 태그 생성 API 구현 (POST /generate/)
