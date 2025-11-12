@@ -31,7 +31,7 @@ class GenerateRequest(BaseModel):
     Step 2 요청 스키마: /generate/ 엔드포인트에 전달되는 데이터 정의
     """
 
-    user_input: str  # 사용자의 음성/텍스트 입력
+    user_input: Optional[str] = None  # 사용자가 사용자의 음성/텍스트 입력
     blip_caption: str  # Step 1에서 받은 BLIP 분석 결과
     latitude: Optional[float] = None
     longitude: Optional[float] = None
