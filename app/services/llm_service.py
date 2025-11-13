@@ -4,7 +4,7 @@
 # import google.generativeai as genai
 from typing import Dict, Any
 from app.core.config import settings
-from captioning_module.model import image_captioner  # 모델 로직 재사용
+from captioning_module import image_captioner  # 모델 로직 재사용
 import time  # 토큰 사용량 계산 및 출력을 위해 사용
 from openai import AsyncOpenAI  # AsyncOpenAI를 임포트합니다.
 import json  # JSON 응답 파싱을 위해 사용

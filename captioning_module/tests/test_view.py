@@ -3,7 +3,7 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
-from captioning_module.models import Image
+from captioning_module import Image
 from PIL import Image as PILImage
 from io import BytesIO
 from decimal import Decimal # <-- 이 줄을 추가합니다.

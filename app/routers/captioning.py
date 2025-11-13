@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, Any
 
 # 기존 BLIP/CLIP 모델 로직 (동기)
-from captioning_module.model import image_captioner
+from captioning_module import image_captioner
 
 # 새로 작성한 로직들 (비즈니스 로직 및 DB)
 from app.services.llm_service import (

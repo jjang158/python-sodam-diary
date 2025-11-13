@@ -1,6 +1,6 @@
 # app/routers/v1/images.py
 
-from fastapi import APIRouter, File, UploadFile, Form, HTTPException, status, Depends
+from fastapi import APIRouter, UploadFile, HTTPException, status, Request
 
 # **필수 Import 추가:** CPU 바운드 작업을 위해 run_in_threadpool
 from fastapi.concurrency import run_in_threadpool
@@ -8,7 +8,7 @@ from fastapi.concurrency import run_in_threadpool
 from typing import Optional, Dict, Any, List  # List 추가
 
 # 기존 BLIP 모델 로직 (CLIP 관련 로직은 이미 삭제되었다고 가정)
-from captioning_module.model import image_captioner
+from captioning_module.image_captioner import ImageCaptioner
 
 # 새로 작성한 로직들 (비즈니스 로직 및 DB)
 from app.services.llm_service import get_refined_caption_and_keywords_with_chatgpt_async
@@ -26,8 +26,7 @@ from app.services.llm_service import translate_to_korean_async
 # 🌟 이 파일의 라우터 인스턴스를 생성합니다.
 router = APIRouter()
 
-# ❌ 기존의 create_caption 함수는 이 파일에서 삭제됩니다. ❌
-
+image_captioner = ImageCaptioner.get_image_captioner()
 
 # ----------------------------------------------------
 # A. Step 1: 사진 분석 API 구현 (POST /analyze/)
@@ -37,10 +36,15 @@ router = APIRouter()
     response_model=BlipResult,
     summary="Step 1: 이미지 분석 및 BLIP 캡션 반환",
 )
-async def analyze_image_endpoint(image_file: UploadFile = File(...)):
+async def analyze_image_endpoint(image_file: UploadFile):
     """
     업로드된 사진 파일을 BLIP 모델로 분석하여 캡션(문자열)만 반환합니다.
     """
+    if image_file is None or image_file.filename is None or image_file.filename == "":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No image file uploaded."
+        )
 
     image_data = await image_file.read()
 
@@ -60,7 +64,8 @@ async def analyze_image_endpoint(image_file: UploadFile = File(...)):
 
     # BLIP 결과(영어)를 LLM을 사용하여 한국어로 번역 (LLM 호출)
     try:
-        korean_caption = await translate_to_korean_async(caption)
+        # korean_caption = await translate_to_korean_async(caption)
+        korean_caption = caption
     except Exception as e:
         # 번역 오류가 나더라도, 최소한 영어 캡션을 반환하여 Step 2를 진행 가능하게 함
         print(f"Translation LLM call failed, returning English caption: {e}")
