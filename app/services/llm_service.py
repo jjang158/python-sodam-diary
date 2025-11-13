@@ -22,25 +22,15 @@ def get_estimated_tokens(text: str, is_korean: bool = True) -> int:
     return int(len(text.split()) * ratio)
 
 
-# --- 프롬프트 생성 함수 수정 ---
+# --- 2. 유저 프롬프트 (입력 + 요청만) ---
 def set_prompt_for_keyword(original_caption: str, file_info: str) -> str:
-    """LLM에 전달할 사용자 프롬프트 및 키워드 추출 지시를 생성합니다."""
-    return (
-        # 🌟 통합: 구체적인 페르소나 정의
-        f"당신은 시각 장애인 친구에게 사진을 설명해주는 다정하고 친근한 도우미입니다.\n\n" 
-        
-        # 입력 데이터 및 중요성 강조
-        f"제공된 '사용자 추가 정보'에는 사진 속 인물의 이름이나 중요 정보가 포함될 수 있습니다. 최종 해설 작성 시, 대명사 대신 '사용자 추가 정보'에 포함된 구체적인 이름이나 정보를 반드시 사용하여 서술해 주세요.\n\n"
-        
-        f"[입력 데이터]\n"
-        f"1. 사진 캡션: '{original_caption}'\n"
-        f"2. 사용자 추가 정보: '{file_info}'\n\n"
-        
-        # 🌟 명령 명확화: 이제 A, B 대신 '해설'과 '키워드'로 명확히 지시
-        f"[요청 사항]\n"
-        f"1. 해설 생성: 위에 제시된 정보를 바탕으로, 눈으로 보는 것처럼 사진의 상황, 분위기, 감정을 생생하고 직관적인 언어로 전달하는 최종 해설을 작성해주세요.\n"
-        f"2. 키워드 추출: 이 사진과 해설을 대표하는 **객체, 장소, 분위기, 감정, 인물의 이름**을 포함하는 **10개의 핵심 키워드**를 추출해주세요. 키워드는 명사 또는 명사구 형태여야 합니다."
-    )
+    return {
+        f"다음 정보를 바탕으로 사진을 설명하는 해설과 키워드를 생성해줘:\n\n"
+        f"사진 캡션: {original_caption}\n"
+        f"사용자 추가 정보: {file_info or '없음'}\n\n"
+        f"해설은 모호한 표현을 피하고 객관적이고 구체적으로, 사용자가 제공한 이름이나 정보도 반영해줘."
+        f"키워드는 사진의 주요 요소를 나타내는 명사 또는 명사구 10개로 구성해줘."
+    }
 
 async def get_refined_caption_and_keywords_with_chatgpt_async(
     original_caption: str, file_info: str
@@ -55,12 +45,12 @@ async def get_refined_caption_and_keywords_with_chatgpt_async(
             "keywords": [],
         }
 
-    # --- 1. JSON 응답을 위한 시스템 프롬프트 정의 (키워드 항목 추가) ---
+    # --- 1. 시스템 프롬프트 (역할 + 형식만) ---
     system_prompt = (
-        "You are a helpful assistant that refines an image caption based on provided context. "
-        "Your final response MUST be a single JSON object with two keys: 'refined_caption' (String) and 'keywords' (Array of Strings). "
-        "The value of 'refined_caption' should be the final, refined caption in Korean. "
-        "The value of 'keywords' MUST be an array containing exactly 10 keywords in Korean. "
+        "You are an assistant who describes photos clearly for visually impaired users. "
+        "You must always respond in valid JSON format with exactly two keys: "
+        "'refined_caption' (string, in Korean) and 'keywords' (array of exactly 10 Korean nouns or noun phrases). "
+        "Do not include any extra text outside the JSON."
     )
     
     # --- 2. 사용자 입력 프롬프트 생성 (새로운 함수 사용) ---
@@ -69,14 +59,14 @@ async def get_refined_caption_and_keywords_with_chatgpt_async(
 
     try:
         completion = await async_openai_client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.7,
-            response_format={"type": "json_object"},  # JSON 형식 요청
-        )
+        model=model_name,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.3,  # 형식 일관성 ↑
+        response_format={"type": "json_object"},
+    )
 
         # 3. 응답에서 텍스트 추출 및 파싱
         response_text = completion.choices[0].message.content
