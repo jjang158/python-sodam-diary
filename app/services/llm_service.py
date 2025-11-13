@@ -24,13 +24,13 @@ def get_estimated_tokens(text: str, is_korean: bool = True) -> int:
 
 # --- 2. 유저 프롬프트 (입력 + 요청만) ---
 def set_prompt_for_keyword(original_caption: str, file_info: str) -> str:
-    return {
+    return (
         f"다음 정보를 바탕으로 사진을 설명하는 해설과 키워드를 생성해줘:\n\n"
         f"사진 캡션: {original_caption}\n"
         f"사용자 추가 정보: {file_info or '없음'}\n\n"
-        f"해설은 모호한 표현을 피하고 객관적이고 구체적으로, 사용자가 제공한 이름이나 정보도 반영해줘."
+        f"해설은 모호한 표현을 피하고 객관적이고 구체적으로, 내가 제공한 이름이나 정보도 반영해줘."
         f"키워드는 사진의 주요 요소를 나타내는 명사 또는 명사구 10개로 구성해줘."
-    }
+    )
 
 async def get_refined_caption_and_keywords_with_chatgpt_async(
     original_caption: str, file_info: str
