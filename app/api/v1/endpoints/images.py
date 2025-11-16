@@ -4,6 +4,7 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, status, De
 
 # **필수 Import 추가:** CPU 바운드 작업을 위해 run_in_threadpool
 from fastapi.concurrency import run_in_threadpool
+
 # from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, Any, List  # List 추가
 
@@ -19,14 +20,13 @@ from app.schemas.image import (
     LlmResult,
     ImageCreate,
 )  # 🌟 새로운 스키마 import
+
 # from app.database.database import get_db_session
 
 from app.services.llm_service import translate_to_korean_async
 
 # 🌟 이 파일의 라우터 인스턴스를 생성합니다.
 router = APIRouter()
-
-# ❌ 기존의 create_caption 함수는 이 파일에서 삭제됩니다. ❌
 
 
 # ----------------------------------------------------
@@ -58,83 +58,46 @@ async def analyze_image_endpoint(image_file: UploadFile = File(...)):
             status_code=status.HTTP_400_BAD_REQUEST, detail="Caption generation failed."
         )
 
-    # # BLIP 결과(영어)를 LLM을 사용하여 한국어로 번역 (LLM 호출)
-    # try:
-    #     korean_caption = await translate_to_korean_async(caption)
-    # except Exception as e:
-    #     # 번역 오류가 나더라도, 최소한 영어 캡션을 반환하여 Step 2를 진행 가능하게 함
-    #     print(f"Translation LLM call failed, returning English caption: {e}")
-    #     korean_caption = caption
-
-    # # 최종 한국어 캡션을 반환
-    # return BlipResult(caption=korean_caption)
-
     return BlipResult(caption=caption)
 
-# ----------------------------------------------------
-# B. Step 2: LLM 해설 및 태그 생성 API 구현 (POST /generate/)
-# ----------------------------------------------------
-@router.post(
-    "/generate/",
-    response_model=LlmResult,
-    summary="Step 2: 사용자 입력과 BLIP 결과를 기반으로 LLM 일기/태그 생성",
-)
-async def generate_llm_result(
-    request: GenerateRequest,
-    # db: AsyncSession = Depends(get_db_session),
-):
-    """
-    Step 1의 캡션과 사용자의 추가 정보를 받아 LLM을 호출하여 최종 일기 해설과 단어 태그를 생성하고 DB에 저장합니다.
-    """
 
-    # # 1. LLM 프롬프트 구성
-    # full_prompt = (
-    #     f"당신은 사용자의 사진과 생각을 바탕으로 일기를 작성해주는 인공지능입니다.\n"
-    #     f"다음 정보를 바탕으로 일기 해설('diary')과 핵심 단어 태그('tags')를 JSON 형식으로 생성하세요:\n"
-    #     f"사용자 입력 정보: {request.user_input}\n"
-    #     f"사진으로부터 추출된 설명: {request.blip_caption}"
-    # )
+# # ----------------------------------------------------
+# # B. Step 2: LLM 해설 및 태그 생성 API 구현 (POST /generate/)
+# # ----------------------------------------------------
+# @router.post(
+#     "/generate/",
+#     response_model=LlmResult,
+#     summary="Step 2: 사용자 입력과 BLIP 결과를 기반으로 LLM 일기/태그 생성",
+# )
+# async def generate_llm_result(
+#     request: GenerateRequest,
+#     # db: AsyncSession = Depends(get_db_session),
+# ):
+#     """
+#     Step 1의 캡션과 사용자의 추가 정보를 받아 LLM을 호출하여 최종 일기 해설과 단어 태그를 생성하고 DB에 저장합니다.
+#     """
 
-    # 2. LLM 서비스 호출
-    try:
-        # 🌟 수정: BLIP 캡션(request.blip_caption)과 사용자 입력(request.user_input)만 전달
-        llm_result = await get_refined_caption_and_keywords_with_chatgpt_async(
-            request.blip_caption,
-            request.user_input
-        )
-        refined_caption = llm_result.get("refined_caption", "LLM 결과 추출 오류")
-        keywords = llm_result.get("keywords", [])
+#     # # 1. LLM 프롬프트 구성
+#     # full_prompt = (
+#     #     f"당신은 사용자의 사진과 생각을 바탕으로 일기를 작성해주는 인공지능입니다.\n"
+#     #     f"다음 정보를 바탕으로 일기 해설('diary')과 핵심 단어 태그('tags')를 JSON 형식으로 생성하세요:\n"
+#     #     f"사용자 입력 정보: {request.user_input}\n"
+#     #     f"사진으로부터 추출된 설명: {request.blip_caption}"
+#     # )
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"LLM generation failed: {e}",
-        )
-    
-    return LlmResult(diary=refined_caption, tags=keywords)
+#     # 2. LLM 서비스 호출
+#     try:
+#         # 🌟 수정: BLIP 캡션(request.blip_caption)과 사용자 입력(request.user_input)만 전달
+#         llm_result = await get_refined_caption_and_keywords_with_chatgpt_async(
+#             request.blip_caption, request.user_input
+#         )
+#         refined_caption = llm_result.get("refined_caption", "LLM 결과 추출 오류")
+#         keywords = llm_result.get("keywords", [])
 
-    # # 3. DB 저장을 위한 Pydantic 데이터 준비
-    # data_to_create = ImageCreate(
-    #     file="BLIP_LLM_Processed",  # 임시 파일명
-    #     refined_caption=refined_caption,
-    #     blip_text=request.blip_caption,
-    #     keywords=",".join(keywords) if keywords else None,
-    #     file_info=request.user_input,
-    #     latitude=request.latitude,
-    #     longitude=request.longitude,
-    #     location=request.location,
-    # )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+#             detail=f"LLM generation failed: {e}",
+#         )
 
-    # # 4. DB 저장 및 응답 반환
-    # try:
-    #     saved_image = await crud.create_image_data(db, data_to_create)
-
-    #     # LlmResult 스키마에 맞춰 최종 응답 반환
-    #     return LlmResult(diary=saved_image.refined_caption, tags=keywords)
-
-    # except Exception as e:
-    #     # await db.rollback()
-    #     raise HTTPException(
-    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #         detail=f"데이터베이스 저장 중 오류 발생: {e}",
-    #     )
+#     return LlmResult(diary=refined_caption, tags=keywords)
