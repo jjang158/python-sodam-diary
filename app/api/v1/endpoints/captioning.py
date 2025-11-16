@@ -9,8 +9,7 @@ from captioning_module.model import image_captioner
 
 # 새로 작성한 로직들 (비즈니스 로직 및 DB)
 from app.services.llm_service import (
-    get_refined_caption_with_gemini_async,
-    get_refined_caption_and_keywords_with_chatgpt_async,
+    get_refined_caption_and_keywords_with_chatgpt_async
 )
 from app.services import crud  # crud.py에서 정의한 DB 상호작용 함수
 from app.schemas.image import ImageCreate, Image  # DB 저장용 스키마, 응답용 스키마
@@ -74,9 +73,10 @@ async def create_caption(
     keywords = [] # 키워드 변수 초기화
 
     if llm_choice == "gemini":
-        # Gemini는 기존 로직을 유지 (문자열 반환 가정)
-        refined_caption = await get_refined_caption_with_gemini_async(
-            f"이미지 설명: {blip_text}. 분위기: {clip_text}.", file_info
+        # Gemini 호출 (미구현 상태)
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Gemini LLM 통합은 아직 구현되지 않았습니다.",
         )
     elif llm_choice == "chatgpt":
         # ChatGPT 호출 및 딕셔너리 응답 처리

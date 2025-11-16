@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 # 🌟 변경: 기존 captioning 라우터 대신, 새로운 통합 라우터(api)를 import합니다.
-from app.routers.api import api_router 
+from app.api.v1.routers import api_router 
 from app.database.database import async_engine, Base
 from app.database.models import * # 모델을 import해야 Base.metadata가 테이블을 인식
 
