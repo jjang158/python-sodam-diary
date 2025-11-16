@@ -28,7 +28,9 @@ def set_prompt_for_keyword(original_caption: str, file_info: str) -> str:
         f"다음 정보를 바탕으로 사진을 설명하는 해설과 키워드를 생성해줘:\n\n"
         f"사진 캡션: {original_caption}\n"
         f"사용자 추가 정보: {file_info or '없음'}\n\n"
-        f"해설은 모호한 표현을 피하고 객관적이고 구체적으로, 내가 제공한 이름이나 정보도 반영해줘."
+        f"해설은 모호한 표현을 피하고 객관적이고 구체적으로, 사용자 추가 정보로 제공한 이름이나 정보도 반영해서 1인칭으로 '-했다'체로 작성해줘."
+        f"해설의 첫 문장은 사용자 추가 정보를 중심으로 사진의 주체나 장소와 같은 주요 내용을 간결하게 요약하고, 전체 해설은 3~4문장 이내로 작성"
+        f"단, 시각 장애인을 대상으로 하기에 사진의 시각적 요소를 충분히 설명하고, 객체의 정확한 정보(숫자, 크기, 색깔 등)를 전달하는 데 중점을 둬."
         f"키워드는 사진의 주요 요소를 나타내는 명사 또는 명사구 10개로 구성해줘."
     )
 
@@ -50,6 +52,7 @@ async def get_refined_caption_and_keywords_with_chatgpt_async(
         "You are an assistant who describes photos clearly for visually impaired users. "
         "You must always respond in valid JSON format with exactly two keys: "
         "'refined_caption' (string, in Korean) and 'keywords' (array of exactly 10 Korean nouns or noun phrases). "
+        "but if you cannot find enough keywords, return as many as you can. "
         "Do not include any extra text outside the JSON."
     )
     
