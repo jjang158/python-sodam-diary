@@ -14,6 +14,7 @@ if settings.CHATGPT_API_KEY:
 else:
     async_openai_client = None
 
+
 # --- 토큰 사용량 체크 로직 (Persistence 제거, Limit 체크는 유지) ---
 def get_estimated_tokens(text: str, is_korean: bool = True) -> int:
     """텍스트 길이에 따라 토큰을 추정합니다."""
@@ -23,24 +24,33 @@ def get_estimated_tokens(text: str, is_korean: bool = True) -> int:
 
 
 # --- 2. 유저 프롬프트 (입력 + 요청만) ---
-def set_prompt_for_keyword(original_caption: str, file_info: str) -> str:
+def set_prompt_for_keyword(image_caption: str, user_diary_summary: str) -> str:
     return (
-        f"당신은 사용자가 제출한 사진 캡션과 추가 정보를 기반으로 **일기 형식의 해설(Caption)** 및 **키워드(Keywords)**를 생성하는 AI입니다.\n\n"
-        
+        f"당신은 시각장애인을 위한 사진 일기 앱의 스토리텔러입니다.\n"
+        f"제공된 사진 캡셔닝 데이터와 사용자의 음성 일기 요약을 자연스럽게 결합하여, 듣기 편하고 감성적인 하나의 **완성된 일기 스크립트**를 작성하되, 사용자 정보를 최대한 반영하세요.\n\n"
         f"## 입력 정보\n"
-        f"1. **사진 캡션 (BLIP/CLIP)**: {original_caption}\n"
-        f"2. **사용자 추가 정보 (파일명 등)**: {file_info or '없음'}\n\n"
-        
-        f"## 해설 (Caption) 작성 지침\n"
-        f"1. **시점 및 주체**: 해설은 반드시 **1인칭 주체('-했어'체)**로 작성해야 합니다. '내', '우리', '나' 등 주체가 명시된 경우 이를 적극 반영하며, 사용자 추가 정보에 주체(예: 내 강아지, 우리 가족)가 있다면 이를 최우선으로 반영합니다.\n"
-        f"2. **구체성 및 요약**: 첫 문장은 사용자 추가 정보를 중심으로 사진의 **주체, 장소, 시간대, 인원수**와 같은 주요 내용을 **가장 간결하고 구체적**으로 요약합니다. (예: '강아지' 대신 '내 강아지 초코', '바다' 대신 '강릉의 바다'.)\n"
-        f"3. **상세 묘사**: 첫 문장 다음부터는 사진 속 시각적 요소(행동, 색상, 구도 등)를 **상세히 설명**합니다. 이미 언급한 내용은 반복하지 않으며, **사진에 명확히 보이지 않는 정보는 추측하지 않고 제외**합니다.\n"
-        
-        f"## 키워드 (Keywords) 작성 지침\n"
-        f"1. **개수**: 사진의 주요 요소를 나타내는 명사 또는 명사구로 구성하며, **최대 10개**를 목표로 합니다. 다만, **사진 정보가 충분하지 않다면 자의적 판단 하에 10개 미만으로 출력**할 수 있습니다.\n"
-        f"2. **품질 관리**: 키워드는 **단일 명사형**으로 추출하며, **중복되거나 무의미한 키워드(예: 사진, 이미지, 일상 등)**는 **절대 포함하지 않습니다**.\n"
-        f"3. **형식**: 각 키워드는 쉼표(,)로 구분하며, **마지막에 마침표(.)를 찍지 않습니다.**\n"
-        
+        f"1. **사진 캡셔닝 데이터 (시각적 정보)**: {image_caption}\n"
+        f"2. **사용자 음성 일기 요약 (감정, 경험)**: {user_diary_summary}\n\n"
+        f"# 작성 가이드라인\n"
+        f"## 1. 구조 및 흐름\n"
+        f"- **시작**: 사진 설명으로 자연스럽게 시작하여 장면을 그려주세요.\n"
+        f"- **중간**: 사용자의 감정, 생각, 경험을 중간에 자연스럽게 녹여내세요.\n"
+        f"- **마무리**: 따뜻하고 회상적인 톤으로 마무리하세요.\n"
+        f"## 2. 스타일\n"
+        f"- **시점**: 1인칭으로 **사용자 입력 톤에 맞춰** 가장 자연스러운 것을 선택하세요.\n"
+        f"- **문체**: **구어체**로 자연스럽고 친근하게 작성하세요 (TTS로 읽어줄 것을 고려).\n"
+        f"- **길이**: 사용자 입력 양에 따라 가변적이며, 자연스러운 문단 구성 (2-3문단 권장)을 지향하세요.\n"
+        f"- **톤**: 따뜻하고 공감적이며, 지나치게 감상적이지 않은 톤을 유지하세요.\n"
+        f"## 3. 필수 포함 요소\n"
+        f"- 사진의 주요 시각적 요소\n"
+        f"- 사용자가 언급한 핵심 감정이나 사건\n"
+        f"- 시간적/공간적 배경 (사용자 입력에 있는 경우)\n"
+        f"## 4. 주의사항\n"
+        f"- 사진에 없는 정보를 과도하게 추론하거나 창작하지 마세요.\n"
+        f"- 사용자 입력의 핵심 의미를 왜곡하거나 정보를 누락하지 마세요.\n"
+        f"- 사진 설명과 사용자 이야기가 자연스럽게 연결되도록 하세요.\n"
+        f"- **'사진에는~', '캡션 데이터에는~'처럼 메타적 표현은 피하고 직접적으로 묘사**하세요.\n"
+        f"- **TTS로 읽힐 것을 고려하여 쉼표와 마침표를 적절히 배치**하세요.\n"
         f"## 출력 형식 (Response Format)\n"
         f"요청한 정보를 다음 Python 딕셔너리 형식에 맞춰서 JSON으로 출력하세요. 다른 설명이나 텍스트는 일체 포함하지 마세요.\n"
         f"```json\n"
@@ -50,6 +60,7 @@ def set_prompt_for_keyword(original_caption: str, file_info: str) -> str:
         f"}}\n"
         f"```"
     )
+
 
 async def get_refined_caption_and_keywords_with_chatgpt_async(
     original_caption: str, file_info: str
@@ -66,27 +77,27 @@ async def get_refined_caption_and_keywords_with_chatgpt_async(
 
     # --- 1. 시스템 프롬프트 (역할 + 형식만) ---
     system_prompt = (
-        "You are an assistant who describes photos clearly for visually impaired users. "
+        "You are a storyteller who describes photos emotionally. "
         "You must always respond in valid JSON format with exactly two keys: "
         "'refined_caption' (string, in Korean) and 'keywords' (array of exactly 10 Korean nouns or noun phrases). "
         "but if you cannot find enough keywords, return as many as you can. "
         "Do not include any extra text outside the JSON."
     )
-    
+
     # --- 2. 사용자 입력 프롬프트 생성 (새로운 함수 사용) ---
     prompt = set_prompt_for_keyword(original_caption, file_info)
     model_name = "gpt-3.5-turbo"  # 사용할 모델
 
     try:
         completion = await async_openai_client.chat.completions.create(
-        model=model_name,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.3,  # 형식 일관성 ↑
-        response_format={"type": "json_object"},
-    )
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,  # 형식 일관성 ↑
+            response_format={"type": "json_object"},
+        )
 
         # 3. 응답에서 텍스트 추출 및 파싱
         response_text = completion.choices[0].message.content
