@@ -27,32 +27,25 @@ def get_estimated_tokens(text: str, is_korean: bool = True) -> int:
 def set_prompt_for_keyword(image_caption: str, user_diary_summary: str) -> str:
     return (
 
-        f"## 입력 정보\n"
-        f"1. 사진 정보: {image_caption}\n"
-        f"2. 사용자 음성 일기: {user_diary_summary}\n\n"
-        f"## 작성 규칙\n"
-        f"### 구조 (5문장 이상)\n"
-        f"- 시작: 사진 속 장면으로 자연스럽게 시작\n"
-        f"- 중간: 사용자의 감정과 경험을 녹여냄\n"
-        f"### 스타일\n"
-        f"- 1인칭 과거형 일기체 (예: ~했다, ~였다, ~이었다)\n"
-        f"- 개인이 자신의 경험을 회상하며 쓰는 톤\n"
-        f"- '-습니다/-어요/-네요' 같은 설명체, 경어체 절대 금지\n"
-        f"- TTS 고려하여 쉼표, 마침표 적절히 배치\n"
-        f"- 솔직한 톤\n\n"
-        f"### 비중\n"
-        f"- 사진 정보 30%, 사용자 음성 일기 70%\n"
-        f"- 사용자 음성 일기 필수 반영\n\n"
-        f"### 금지사항\n"
-        f"- '사진에는~', '캡션에는~' 같은 메타적 표현 금지\n"
-        f"- 사진에 없는 정보 창작 금지\n"
-        f"- 사용자 입력의 핵심 의미 왜곡/누락 금지\n\n"
+        f"## 입력\n"
+        f"사진: {image_caption}\n"
+        f"음성: {user_diary_summary}\n\n"
+        f"## 규칙\n"
+        f"1. 위 두 정보만 사용 (추가 창작 절대 금지)\n"
+        f"2. 음성 입력 내용은 요약/생략 금지, 전체 포함 필수\n"
+        f"3. 1인칭 과거형 일기체로 문체만 다듬기 (~했다, ~였다)\n"
+        f"4. 비중: 사진 30%, 음성 70%\n"
+        f"5. 음성이 없으면 감정/경험 추가 금지\n\n"
+        f"## 금지\n"
+        f"- '사진에는/캡션에는' 같은 메타 표현\n"
+        f"- 정중체 (습니다/어요/네요)\n"
+        f"- 입력에 없는 내용\n\n"
         f"## 출력 형식\n"
         f"아래 JSON 형식으로만 출력하세요. 다른 설명 금지.\n"
         f"```json\n"
         f"{{\n"
-        f'  "caption": "여기에 작성 지침에 따른 1인칭 해설 전체 내용을 작성합니다.",\n'
-        f'  "keywords": "키워드1, 키워드2, 키워드3, ... (최대 10개)"\n'
+        f'  "caption": "작성된 일기 전체 내용",\n'
+        f'  "keywords": "키워드1, 키워드2, 키워드3"\n'
         f"}}\n"
         f"```"
     )
@@ -73,8 +66,11 @@ async def get_refined_caption_and_keywords_with_chatgpt_async(
 
     # --- 1. 시스템 프롬프트 (역할 + 형식만) ---
     system_prompt = (
-        "당신은 시각장애인을 위한 사진 일기 앱을 사용하는 시각장애인 입니다."
-        "사진 정보와 사용자의 음성 일기를 자연스럽게 결합하여 TTS로 읽힐 완성된 일기를 작성하세요."
+        "You are a diary formatter. "
+        "CRITICAL:"
+        "(1) First sentence MUST describe the photo. "
+        "(2) Use ONLY the provided photo description and voice input. "
+        "(3) Never invent emotions, events, or details not explicitly stated. "
         "You must always respond in valid JSON format with exactly two keys: "
         "'refined_caption' (string, in Korean) and 'keywords' (array of exactly 10 Korean nouns or noun phrases). "
         "but if you cannot find enough keywords, return as many as you can. "
